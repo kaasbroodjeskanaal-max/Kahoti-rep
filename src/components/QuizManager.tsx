@@ -16,9 +16,11 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
   // Manual Creation State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [questions, setQuestions] = useState<Omit<Question, "id">[]>([
     {
       questionText: "",
+      imageUrl: "",
       timeLimit: 20,
       points: 1000,
       options: ["", "", "", ""],
@@ -41,8 +43,15 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
       return session.user.id;
     }
     let localId = localStorage.getItem("quiz_player_uuid");
-    if (!localId) {
-      localId = `anon_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!localId || !uuidRegex.test(localId)) {
+      localId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
       localStorage.setItem("quiz_player_uuid", localId);
     }
     return localId;
@@ -64,6 +73,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
         id: q.id,
         title: q.title || "Naamloze Quiz",
         description: q.description || "",
+        imageUrl: q.image_url || "",
         creatorId: q.created_by,
         createdAt: q.created_at,
         questions: q.questions || [],
@@ -139,6 +149,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
       ...questions,
       {
         questionText: "",
+        imageUrl: "",
         timeLimit: 20,
         points: 1000,
         options: ["", "", "", ""],
@@ -156,6 +167,8 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
     const updated = [...questions];
     if (field === "questionText") {
       updated[idx].questionText = value;
+    } else if (field === "imageUrl") {
+      updated[idx].imageUrl = value;
     } else if (field === "timeLimit") {
       updated[idx].timeLimit = Number(value);
     } else if (field === "points") {
@@ -206,6 +219,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
           id: randomQuizId,
           title: title.trim(),
           description: description.trim(),
+          image_url: imageUrl.trim() || null,
           created_by: uId,
           created_at: new Date().toISOString(),
           questions: parsedQuestions,
@@ -216,9 +230,11 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
       // Clear state and reload
       setTitle("");
       setDescription("");
+      setImageUrl("");
       setQuestions([
         {
           questionText: "",
+          imageUrl: "",
           timeLimit: 20,
           points: 1000,
           options: ["", "", "", ""],
@@ -397,9 +413,19 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               {quizzes.map((quiz) => (
                 <div
                   key={quiz.id}
-                  className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                  className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
                 >
                   <div>
+                    {quiz.imageUrl && (
+                      <div className="mb-4 -mx-6 -mt-6">
+                        <img 
+                          src={quiz.imageUrl} 
+                          alt="Quiz afbeelding" 
+                          referrerPolicy="no-referrer"
+                          className="w-full h-40 object-cover" 
+                        />
+                      </div>
+                    )}
                     <h3 className="text-xl font-bold text-slate-800 font-display mb-2">
                       {quiz.title}
                     </h3>
@@ -458,6 +484,16 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition h-20 resize-none"
               />
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Quiz Afbeelding URL (Optioneel)</label>
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://voorbeeld.nl/plaatje.jpg"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+              />
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -485,6 +521,17 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
                     value={q.questionText}
                     onChange={(e) => handleQuestionChange(qIdx, "questionText", e.target.value)}
                     placeholder="Type hier je vraag..."
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-650 mb-1">Vraag Afbeelding URL (Optioneel)</label>
+                  <input
+                    type="url"
+                    value={q.imageUrl || ""}
+                    onChange={(e) => handleQuestionChange(qIdx, "imageUrl", e.target.value)}
+                    placeholder="https://voorbeeld.nl/plaatje.jpg"
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"
                   />
                 </div>

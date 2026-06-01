@@ -76,8 +76,15 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
         playerUid = authSession.user.id;
       } else {
         let localId = localStorage.getItem("quiz_player_uuid");
-        if (!localId) {
-          localId = `anon_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!localId || !uuidRegex.test(localId)) {
+          localId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
           localStorage.setItem("quiz_player_uuid", localId);
         }
         playerUid = localId;

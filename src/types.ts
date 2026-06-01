@@ -1,6 +1,7 @@
 export interface Question {
   id: string;
   questionText: string;
+  imageUrl?: string;
   timeLimit: number; // in seconds, e.g., 20
   points: number;     // e.g., 1000
   options: string[];  // 4 answer choices
@@ -11,6 +12,7 @@ export interface Quiz {
   id: string;
   title: string;
   description: string;
+  imageUrl?: string;
   creatorId: string;
   createdAt: any; // Firestore timestamp or standard Date ISO string
   questions: Question[];

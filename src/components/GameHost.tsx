@@ -23,12 +23,32 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
   useEffect(() => {
     const createSession = async () => {
       const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const generatedSessionId = `s_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const generatedSessionId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
 
       try {
+        let activeHostId = "";
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        if (authSession?.user?.id) {
+          activeHostId = authSession.user.id;
+        } else {
+          activeHostId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
+        }
+
         const { error } = await supabase.from("sessions").insert({
           id: generatedSessionId,
-          host_id: "host_user", // Simplified host user ID
+          host_id: activeHostId,
           code: generatedCode,
           status: "lobby",
           quiz_id: quiz.id,
@@ -480,11 +500,21 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   {/* Question Prompt */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-3xl px-8 py-10 text-center space-y-2 shadow-xs">
+                  <div className="bg-slate-950 border border-slate-800 rounded-3xl px-8 py-10 text-center space-y-4 shadow-xs">
                     <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase">MEERKEUZEVRAAG</p>
                     <h1 className="text-3xl md:text-4xl font-extrabold text-white font-display leading-snug">
                       {currentQuestion.questionText}
                     </h1>
+                    {currentQuestion.imageUrl && (
+                      <div className="pt-4 flex justify-center">
+                        <img 
+                          src={currentQuestion.imageUrl} 
+                          alt="Vraag afbeelding" 
+                          referrerPolicy="no-referrer"
+                          className="max-h-64 object-contain rounded-xl border border-slate-700" 
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Options Large Grid */}
@@ -526,10 +556,20 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   {/* Question detail */}
-                  <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 text-center">
+                  <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 text-center space-y-4">
                     <h2 className="text-2xl font-bold font-display text-slate-100">
                       "{currentQuestion.questionText}"
                     </h2>
+                    {currentQuestion.imageUrl && (
+                      <div className="pt-2 flex justify-center">
+                        <img 
+                          src={currentQuestion.imageUrl} 
+                          alt="Vraag afbeelding" 
+                          referrerPolicy="no-referrer"
+                          className="max-h-32 object-contain rounded-xl border border-slate-700" 
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Dynamic Stats Chart & options feedback */}

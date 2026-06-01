@@ -26,8 +26,15 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
         setPlayerUid(authSession.user.id);
       } else {
         let localId = localStorage.getItem("quiz_player_uuid");
-        if (!localId) {
-          localId = `anon_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!localId || !uuidRegex.test(localId)) {
+          localId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
           localStorage.setItem("quiz_player_uuid", localId);
         }
         setPlayerUid(localId);
@@ -251,16 +258,28 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               className="flex-1 flex flex-col justify-between space-y-4"
             >
               {/* Top brief */}
-              <div className="flex justify-between items-center bg-white border border-slate-100 p-4 rounded-2xl shadow-xs">
-                <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">Vraag {currentQuestionIdx + 1}</p>
-                  <h3 className="font-bold text-slate-800 font-display text-base md:text-lg line-clamp-1">
-                    {activeQuestion.questionText}
-                  </h3>
+              <div className="flex flex-col gap-3 bg-white border border-slate-100 p-5 rounded-3xl shadow-xs">
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Vraag {currentQuestionIdx + 1}</p>
+                    <h3 className="font-bold text-slate-800 font-display text-lg leading-snug">
+                      {activeQuestion.questionText}
+                    </h3>
+                  </div>
+                  <div className="bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl text-indigo-700 font-bold font-mono text-sm flex items-center gap-1.5 shrink-0">
+                    <Clock className="w-4 h-4" /> {activeQuestion.timeLimit}s
+                  </div>
                 </div>
-                <div className="bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl text-indigo-700 font-bold font-mono text-sm flex items-center gap-1 shrink-0">
-                  <Clock className="w-4 h-4" /> {activeQuestion.timeLimit}s
-                </div>
+                {activeQuestion.imageUrl && (
+                  <div className="flex justify-center mt-2">
+                    <img 
+                      src={activeQuestion.imageUrl} 
+                      alt="Vraag afbeelding" 
+                      referrerPolicy="no-referrer"
+                      className="max-h-32 object-contain rounded-xl border border-slate-200 shadow-sm" 
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons Interface */}
