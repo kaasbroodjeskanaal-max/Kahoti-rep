@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { GameSession, Player, Question } from "../types";
 import { Check, X, Award, Loader2, Sparkles, LogOut, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { parseNicknameAndAvatar } from "../avatarUtils";
 
 interface GamePlayerProps {
   sessionId: string;
@@ -11,6 +12,7 @@ interface GamePlayerProps {
 }
 
 export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerProps) {
+  const { displayName, avatarUrl } = parseNicknameAndAvatar(nickname || "");
   const [session, setSession] = useState<GameSession | null>(null);
   const [self, setSelf] = useState<Player | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -200,13 +202,13 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto py-10"
             >
-              <div className="w-20 h-20 bg-indigo-50 border border-indigo-100 rounded-3xl flex items-center justify-center text-indigo-600 text-3xl font-black shadow-xs">
-                {nickname.charAt(0).toUpperCase()}
+              <div className="w-24 h-24 bg-white border-4 border-indigo-100 rounded-full flex items-center justify-center shadow-xs overflow-hidden">
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               </div>
 
               <div className="space-y-2">
                 <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-750 font-bold text-xs rounded-full uppercase tracking-wider">
-                  Ingelogd als {nickname}
+                  Ingelogd als {displayName}
                 </span>
                 <h1 className="text-2xl font-black font-display text-slate-800">
                   Je bent binnen!

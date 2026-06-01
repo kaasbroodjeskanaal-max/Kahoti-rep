@@ -9,11 +9,26 @@ interface QuizManagerProps {
 }
 
 export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
+    try {
+      const cached = localStorage.getItem("cached_quizzes");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem("cached_quizzes");
+      return !cached || JSON.parse(cached).length === 0;
+    } catch {
+      return true;
+    }
+  });
   const [activeTab, setActiveTab] = useState<"list" | "create">("list");
 
   // Manual Creation State
+  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -58,8 +73,10 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
   };
 
   // Retrieve existing quizzes
-  const fetchQuizzes = async () => {
-    setIsLoading(true);
+  const fetchQuizzes = async (silent = false) => {
+    if (!silent && quizzes.length === 0) {
+      setIsLoading(true);
+    }
     try {
       const uId = await getUserId();
       const { data, error } = await supabase
@@ -80,7 +97,13 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
       }));
 
       // Sort newest first
-      setQuizzes(list.sort((a, b) => b.id.localeCompare(a.id)));
+      const sorted = list.sort((a, b) => b.id.localeCompare(a.id));
+      setQuizzes(sorted);
+      try {
+        localStorage.setItem("cached_quizzes", JSON.stringify(sorted));
+      } catch (e) {
+        console.error(e);
+      }
     } catch (err: any) {
       console.error("Fout bij ophalen quizzen:", err);
     } finally {
@@ -105,7 +128,9 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
   }, []);
 
   useEffect(() => {
-    fetchQuizzes();
+    // If we have cached quizzes, fetch silently to refresh in the background
+    const silent = quizzes.length > 0;
+    fetchQuizzes(silent);
   }, [currentUser]);
 
   const handleSignOut = async () => {
@@ -185,6 +210,23 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
     setQuestions(updated);
   };
 
+  // Start editing a quiz
+  const handleEditQuiz = (quiz: Quiz) => {
+    setEditingQuizId(quiz.id);
+    setTitle(quiz.title);
+    setDescription(quiz.description);
+    setImageUrl(quiz.imageUrl || "");
+    setQuestions(quiz.questions.map(q => ({
+      questionText: q.questionText,
+      imageUrl: q.imageUrl || "",
+      timeLimit: q.timeLimit,
+      points: q.points,
+      options: [...q.options],
+      correctOptionIndex: q.correctOptionIndex,
+    })));
+    setActiveTab("create");
+  };
+
   // Save manual quiz
   const handleSaveManualQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,33 +243,36 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
 
     try {
       const uId = await getUserId();
-      const randomQuizId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      const saveQuizId = editingQuizId || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
         : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
             const r = (Math.random() * 16) | 0;
             const v = c === "x" ? r : (r & 0x3) | 0x8;
             return v.toString(16);
-          });
+          }));
       const parsedQuestions = questions.map((q, idx) => ({
         ...q,
         id: `q_${idx}_${Date.now()}`,
       }));
 
+      const payload = {
+        id: saveQuizId,
+        title: title.trim(),
+        description: description.trim(),
+        image_url: imageUrl.trim() || null,
+        created_by: uId,
+        created_at: new Date().toISOString(),
+        questions: parsedQuestions,
+      };
+
       const { error } = await supabase
         .from("quizzes")
-        .insert({
-          id: randomQuizId,
-          title: title.trim(),
-          description: description.trim(),
-          image_url: imageUrl.trim() || null,
-          created_by: uId,
-          created_at: new Date().toISOString(),
-          questions: parsedQuestions,
-        });
+        .upsert(payload);
 
       if (error) throw new Error(error.message);
 
       // Clear state and reload
+      setEditingQuizId(null);
       setTitle("");
       setDescription("");
       setImageUrl("");
@@ -242,7 +287,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
         },
       ]);
       setActiveTab("list");
-      fetchQuizzes();
+      fetchQuizzes(true);
     } catch (err: any) {
       console.error(err);
       alert("Fout bij opslaan van de quiz: " + err.message);
@@ -259,7 +304,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
         .eq("id", quizId);
 
       if (error) throw new Error(error.message);
-      fetchQuizzes();
+      fetchQuizzes(true);
     } catch (error: any) {
       console.error(error);
       alert("Fout bij verwijderen quiz: " + error.message);
@@ -373,7 +418,14 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
           Mijn Quizzen ({quizzes.length})
         </button>
         <button
-          onClick={() => setActiveTab("create")}
+          onClick={() => {
+            setEditingQuizId(null);
+            setTitle("");
+            setDescription("");
+            setImageUrl("");
+            setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0 }]);
+            setActiveTab("create");
+          }}
           className={`flex-1 py-3 text-center font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-2 ${
             activeTab === "create"
               ? "bg-indigo-600 text-white shadow-sm"
@@ -401,7 +453,14 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               </p>
               <div className="flex justify-center">
                 <button
-                  onClick={() => setActiveTab("create")}
+                  onClick={() => {
+                    setEditingQuizId(null);
+                    setTitle("");
+                    setDescription("");
+                    setImageUrl("");
+                    setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0 }]);
+                    setActiveTab("create");
+                  }}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold shadow-xs transition cursor-pointer"
                 >
                   <Plus className="w-4 h-4" /> Handmatig Aanmaken
@@ -443,6 +502,13 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
                       className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold transition cursor-pointer"
                     >
                       <Play className="w-4 h-4 fill-current" /> Host Quiz
+                    </button>
+                    <button
+                      onClick={() => handleEditQuiz(quiz)}
+                      className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 p-2.5 border border-gray-100 hover:border-indigo-200 rounded-xl transition cursor-pointer font-bold"
+                      title="Bewerken"
+                    >
+                      Bewerken
                     </button>
                     <button
                       onClick={() => handleDeleteQuiz(quiz.id)}
@@ -660,7 +726,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
             type="submit"
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md transition cursor-pointer"
           >
-            Sla Quiz Op
+            {editingQuizId ? "Wijzigingen Opslaan" : "Sla Quiz Op"}
           </button>
         </form>
       )}

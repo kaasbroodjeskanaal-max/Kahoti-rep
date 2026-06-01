@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { Quiz, GameSession, Player } from "../types";
 import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { parseNicknameAndAvatar } from "../avatarUtils";
 
 interface GameHostProps {
   quiz: Quiz;
@@ -438,7 +439,9 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                       <div className="text-slate-500 italic py-12">Wacht op spelers...</div>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-2">
-                        {players.map((p, idx) => (
+                        {players.map((p, idx) => {
+                          const { displayName } = parseNicknameAndAvatar(p.nickname || "");
+                          return (
                           <motion.div
                             key={p.id}
                             initial={{ scale: 0.8, opacity: 0 }}
@@ -446,10 +449,11 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                             transition={{ delay: idx * 0.05 }}
                             className="bg-indigo-950/40 border border-indigo-950 px-4 py-3 rounded-2xl text-indigo-200 font-bold font-display flex items-center justify-between text-ellipsis overflow-hidden"
                           >
-                            <span className="truncate">{p.nickname}</span>
+                            <span className="truncate">{displayName}</span>
                             <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" />
                           </motion.div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -649,6 +653,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                     ) : (
                       <div className="space-y-2.5">
                         {sortedPlayers.slice(0, 5).map((player, idx) => {
+                          const { displayName, avatarUrl } = parseNicknameAndAvatar(player.nickname || "");
                           const medalColors = ["bg-amber-400 text-slate-950", "bg-slate-300 text-slate-950", "bg-amber-600 text-white"];
                           const isTop3 = idx < 3;
 
@@ -664,7 +669,8 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                 <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${isTop3 ? medalColors[idx] : "bg-slate-800 text-slate-300"}`}>
                                   {idx + 1}
                                 </span>
-                                <span className="font-extrabold text-lg text-slate-100 truncate">{player.nickname}</span>
+                                <img src={avatarUrl} alt="avatar" className="w-10 h-10 -ml-2 rounded-full border-2 border-slate-700 bg-slate-800" />
+                                <span className="font-extrabold text-lg text-slate-100 truncate">{displayName}</span>
                                 {player.streak > 1 && (
                                   <span className="inline-flex items-center gap-0.5 bg-orange-600 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white animate-pulse">
                                     🔥 {player.streak} Streak
@@ -716,15 +722,18 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   <div className="flex justify-center items-end gap-3 md:gap-6 max-w-2xl mx-auto pt-16 pb-8 px-4 h-[320px]">
-                    {sortedPlayers[1] && (
+                    {sortedPlayers[1] && (() => {
+                      const { displayName: n1, avatarUrl: a1 } = parseNicknameAndAvatar(sortedPlayers[1].nickname || "");
+                      return (
                       <motion.div
                         initial={{ y: 50, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.3 }}
                         className="flex flex-col items-center w-28 md:w-36"
                       >
-                        <span className="text-slate-300 font-extrabold text-sm md:text-base mb-2 max-w-full truncate px-2" title={sortedPlayers[1].nickname}>
-                          {sortedPlayers[1].nickname}
+                        <img src={a1} alt="avatar" className="w-14 h-14 bg-slate-800 border-2 border-slate-700 rounded-full mb-1" />
+                        <span className="text-slate-300 font-extrabold text-sm md:text-base mb-1 max-w-full truncate px-2" title={n1}>
+                          {n1}
                         </span>
                         <span className="text-slate-400 font-mono text-xs font-semibold mb-2">{sortedPlayers[1].score ?? 0} pt</span>
                         <div className="w-full bg-slate-800 border-t border-slate-700 h-28 md:h-36 rounded-t-2xl flex flex-col items-center justify-center shadow-md relative">
@@ -732,9 +741,12 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                           <span className="text-xs text-slate-400 uppercase font-bold tracking-widest mt-1">Zilver</span>
                         </div>
                       </motion.div>
-                    )}
+                      );
+                    })()}
 
-                    {sortedPlayers[0] && (
+                    {sortedPlayers[0] && (() => {
+                      const { displayName: n0, avatarUrl: a0 } = parseNicknameAndAvatar(sortedPlayers[0].nickname || "");
+                      return (
                       <motion.div
                         initial={{ y: 80, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
@@ -742,8 +754,9 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         className="flex flex-col items-center w-32 md:w-44 z-10"
                       >
                         <Sparkles className="w-6 h-6 text-amber-400 animate-pulse mb-1" />
-                        <span className="text-amber-400 font-display font-extrabold text-base md:text-lg mb-2 max-w-full truncate px-2" title={sortedPlayers[0].nickname}>
-                          🏆 {sortedPlayers[0].nickname}
+                        <img src={a0} alt="avatar" className="w-20 h-20 bg-slate-800 border-4 border-amber-400 rounded-full mb-1" />
+                        <span className="text-amber-400 font-display font-extrabold text-base md:text-lg mb-1 max-w-full truncate px-2" title={n0}>
+                          🏆 {n0}
                         </span>
                         <span className="text-amber-300 font-mono text-sm font-semibold mb-2">{sortedPlayers[0].score ?? 0} pt</span>
                         <div className="w-full bg-linear-to-b from-amber-400 to-amber-500 bg-amber-400 hover:scale-105 transition border-t border-amber-300 h-36 md:h-48 rounded-t-2xl flex flex-col items-center justify-center shadow-lg relative">
@@ -751,17 +764,21 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                           <span className="text-xs text-slate-900 uppercase font-black tracking-widest mt-1">Goud</span>
                         </div>
                       </motion.div>
-                    )}
+                      );
+                    })()}
 
-                    {sortedPlayers[2] && (
+                    {sortedPlayers[2] && (() => {
+                      const { displayName: n2, avatarUrl: a2 } = parseNicknameAndAvatar(sortedPlayers[2].nickname || "");
+                      return (
                       <motion.div
                         initial={{ y: 40, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.5 }}
                         className="flex flex-col items-center w-24 md:w-32"
                       >
-                        <span className="text-amber-700 font-extrabold text-sm mb-2 max-w-full truncate px-2" title={sortedPlayers[2].nickname}>
-                          {sortedPlayers[2].nickname}
+                        <img src={a2} alt="avatar" className="w-12 h-12 bg-slate-800 border-2 border-slate-700 rounded-full mb-1" />
+                        <span className="text-amber-700 font-extrabold text-sm mb-1 max-w-full truncate px-2" title={n2}>
+                          {n2}
                         </span>
                         <span className="text-slate-400 font-mono text-xs font-semibold mb-2">{sortedPlayers[2].score ?? 0} pt</span>
                         <div className="w-full bg-slate-800 border-t border-slate-700 h-20 md:h-28 rounded-t-2xl flex flex-col items-center justify-center shadow-md relative">
@@ -769,7 +786,8 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                           <span className="text-xs text-slate-400 uppercase font-bold tracking-widest mt-1">Brons</span>
                         </div>
                       </motion.div>
-                    )}
+                      );
+                    })()}
                   </div>
 
                   <div className="max-w-md mx-auto pt-6">

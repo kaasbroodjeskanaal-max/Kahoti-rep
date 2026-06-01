@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { supabase } from "../supabase";
-import { ArrowLeft, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Loader2, Play, RefreshCw } from "lucide-react";
+import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl } from "../avatarUtils";
 
 interface QuizJoinProps {
   onJoined: (sessionId: string, nickname: string) => void;
@@ -14,6 +15,20 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [targetSessionId, setTargetSessionId] = useState("");
+
+  // Avatar states
+  const [baseIdx, setBaseIdx] = useState(0);
+  const [hatIdx, setHatIdx] = useState(0);
+  const [accIdx, setAccIdx] = useState(0);
+  const [gradIdx, setGradIdx] = useState(0);
+  const [avatarTab, setAvatarTab] = useState<"base" | "hat" | "acc" | "bg">("base");
+
+  const randomizeAvatar = () => {
+    setBaseIdx(Math.floor(Math.random() * AVATAR_BASES.length));
+    setHatIdx(Math.floor(Math.random() * AVATAR_HATS.length));
+    setAccIdx(Math.floor(Math.random() * AVATAR_ACCESSORIES.length));
+    setGradIdx(Math.floor(Math.random() * AVATAR_GRADIENTS.length));
+  };
 
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,12 +106,13 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
       }
 
       // Create/Upsert player record in players table
+      const combinedNickname = `${nickname.trim()}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}`;
       const { error: insertError } = await supabase
         .from("players")
         .upsert({
           id: playerUid,
           session_id: targetSessionId,
-          nickname: nickname.trim(),
+          nickname: combinedNickname,
           score: 0,
           streak: 0,
           current_answer_index: null,
@@ -109,7 +125,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
         throw new Error(insertError.message);
       }
 
-      onJoined(targetSessionId, nickname.trim());
+      onJoined(targetSessionId, combinedNickname);
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Er is een fout opgetreden bij het betreden van de lobby.");
@@ -179,23 +195,191 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
             </div>
           </form>
         ) : (
-          /* STEP 2: CHOOSE NICKNAME */
+          /* STEP 2: CHOOSE NICKNAME & AVATAR */
           <form onSubmit={handleJoinLobby} className="space-y-6">
             <div className="text-center">
               <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 font-mono font-bold text-sm rounded-full mb-3">
                 Lobby gevonden!
               </span>
-              <h2 className="text-2xl font-bold font-display text-slate-800 mb-2">Kies een Nickname</h2>
-              <p className="text-gray-500 text-sm">Met welke naam wil je op het leaderboard verschijnen?</p>
+              <h2 className="text-2xl font-bold font-display text-slate-800 mb-1">Poppetje & Nickname</h2>
+              <p className="text-gray-500 text-xs">Ontwerp je poppetje en voer je spelersnaam in!</p>
+            </div>
+
+            {/* Avatar Builder */}
+            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col gap-4">
+              <div className="flex items-center gap-4 bg-white p-3 rounded-2xl border border-slate-100 w-full">
+                <div className="relative shrink-0">
+                  <img 
+                    src={getAvatarUrl(nickname, baseIdx, hatIdx, accIdx, gradIdx)} 
+                    alt="Jouw avatar" 
+                    className="w-20 h-20 rounded-full border-4 border-slate-50 shadow-sm bg-white" 
+                  />
+                  <button
+                    type="button"
+                    onClick={randomizeAvatar}
+                    className="absolute -bottom-1 -right-1 bg-indigo-600 text-white p-1.5 rounded-full shadow-md hover:scale-110 active:scale-95 transition cursor-pointer"
+                    title="Verras me!"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Live Ontwerp</label>
+                  <p className="font-extrabold text-slate-700 truncate text-base">
+                    {nickname || "Kies een naam..."}
+                  </p>
+                  <p className="text-[11px] text-gray-500 flex flex-wrap gap-1 mt-1 font-semibold">
+                    <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-md">{AVATAR_BASES[baseIdx]?.name}</span>
+                    {hatIdx > 0 && <span className="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-md">{AVATAR_HATS[hatIdx]?.name}</span>}
+                    {accIdx > 0 && <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md">{AVATAR_ACCESSORIES[accIdx]?.name}</span>}
+                  </p>
+                </div>
+              </div>
+
+              {/* Category Tab buttons */}
+              <div className="flex border-b border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setAvatarTab("base")}
+                  className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+                    avatarTab === "base"
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  🌏 Basis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarTab("hat")}
+                  className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+                    avatarTab === "hat"
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  👑 Hoed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarTab("acc")}
+                  className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+                    avatarTab === "acc"
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  🕶️ Bril/Extra
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvatarTab("bg")}
+                  className={`flex-1 pb-2 text-xs font-bold text-center border-b-2 transition cursor-pointer ${
+                    avatarTab === "bg"
+                      ? "border-indigo-600 text-indigo-600"
+                      : "border-transparent text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  🎨 Kleur
+                </button>
+              </div>
+
+              {/* Selector Menu Grid */}
+              <div className="max-h-[140px] overflow-y-auto bg-white/50 p-2 rounded-2xl border border-slate-100">
+                {avatarTab === "base" && (
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {AVATAR_BASES.map((b, idx) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBaseIdx(idx)}
+                        className={`aspect-square flex flex-col items-center justify-center text-2xl rounded-xl transition cursor-pointer hover:bg-slate-100 ${
+                          baseIdx === idx 
+                            ? "bg-indigo-50 border-2 border-indigo-600 shadow-xs" 
+                            : b.emoji === "" 
+                              ? "bg-slate-100 text-slate-400 text-xs border border-dashed border-slate-300"
+                              : "bg-white border border-slate-100"
+                        }`}
+                        title={b.name}
+                      >
+                        {b.emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {avatarTab === "hat" && (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {AVATAR_HATS.map((h, idx) => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => setHatIdx(idx)}
+                        className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 gap-1 ${
+                          hatIdx === idx 
+                            ? "bg-indigo-50 border-2 border-indigo-600 shadow-xs" 
+                            : "bg-white border border-slate-100"
+                        }`}
+                        title={h.name}
+                      >
+                        <span className="text-xl">{h.emoji || "✖️"}</span>
+                        <span className="text-[9px] text-slate-500 font-bold truncate max-w-full px-1">{idx === 0 ? "Geen" : h.name.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {avatarTab === "acc" && (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {AVATAR_ACCESSORIES.map((a, idx) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setAccIdx(idx)}
+                        className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 gap-1 ${
+                          accIdx === idx 
+                            ? "bg-indigo-50 border-2 border-indigo-600 shadow-xs" 
+                            : "bg-white border border-slate-100"
+                        }`}
+                        title={a.name}
+                      >
+                        <span className="text-xl">{a.emoji || "✖️"}</span>
+                        <span className="text-[9px] text-slate-500 font-bold truncate max-w-full px-1">{idx === 0 ? "Geen" : a.name.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {avatarTab === "bg" && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {AVATAR_GRADIENTS.map((g, idx) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setGradIdx(idx)}
+                        style={{ background: `linear-gradient(135deg, ${g.stops[0]}, ${g.stops[1]})` }}
+                        className={`py-2 px-1 rounded-xl text-[10px] font-black text-white text-shadow shadow-xs transition hover:scale-105 cursor-pointer text-center relative ${
+                          gradIdx === idx 
+                            ? "ring-4 ring-indigo-500 outline-none scale-102" 
+                            : "opacity-85 border border-white"
+                        }`}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
               <input
                 type="text"
                 required
-                maxLength={25}
+                maxLength={15}
                 value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
+                onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
                 placeholder="Bijv. QuizKoning"
                 className="w-full text-center text-lg font-bold px-4 py-3 border-2 border-indigo-100 rounded-xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white"
                 disabled={isLoading}
