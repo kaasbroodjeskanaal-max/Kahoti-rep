@@ -1,3 +1,5 @@
+import React from "react";
+
 export interface AvatarItem {
   id: string;
   name: string;
@@ -59,13 +61,13 @@ export const AVATAR_HATS: AvatarItem[] = [
 export const AVATAR_ACCESSORIES: AvatarItem[] = [
   { id: "none", name: "Geen Accessoire", emoji: "", yOffset: 0, size: 0 },
   { id: "sunglasses", name: "Zonnebril 🕶️", emoji: "🕶️", yOffset: 54, size: 28 },
-  { id: "glasses", name: "Nerdbril ⛑️", emoji: "👓", yOffset: 54, size: 28 },
+  { id: "glasses", name: "Nerdbril 👓", emoji: "👓", yOffset: 54, size: 28 },
   { id: "vr", name: "VR-Bril 🥽", emoji: "🥽", yOffset: 54, size: 28 },
+  { id: "headphones", name: "Koptelefoon 🎧", emoji: "🎧", yOffset: 54, size: 28 },
   { id: "bandage", name: "Pleister 🩹", emoji: "🩹", yOffset: 60, size: 22 },
-  { id: "disguise", name: "Snor & Bril 🥸", emoji: "🥸", yOffset: 56, size: 36 },
+  { id: "disguise", name: "Glitter 🌟", emoji: "🌟", yOffset: 56, size: 28 },
   { id: "sparkles", name: "Sterretjes ✨", emoji: "✨", yOffset: 52, size: 28 },
   { id: "hearts", name: "Hartjes 💕", emoji: "💕", yOffset: 48, size: 28 },
-  { id: "catwhisker", name: "Snorrebaard 〰️", emoji: "〰️", yOffset: 62, size: 24 },
 ];
 
 export const AVATAR_GRADIENTS: GradientOption[] = [
@@ -80,13 +82,62 @@ export const AVATAR_GRADIENTS: GradientOption[] = [
   { id: "slate", name: "Cool Metal", stops: ["#64748b", "#334155"] },
 ];
 
-export function getAvatarUrl(name: string, baseIdx: number, hatIdx: number, accIdx: number, gradIdx: number = 0) {
+export function getAvatarAdjustments(baseId: string) {
+  const adjs: Record<string, { hatX?: number; hatY?: number; hatSize?: number; accX?: number; accY?: number; accSize?: number }> = {
+    robot: { accY: 51 },
+    ghost: { hatY: 18, accY: 46 },
+    alien: { hatY: 18, accY: 48, accSize: 32 },
+    cat: { hatY: 18, hatSize: 26, accY: 52, accSize: 26 },
+    lion: { hatY: 18, hatSize: 26, accY: 52 },
+    unicorn: { hatX: 58, hatY: 22, hatSize: 24, accX: 42, accY: 48, accSize: 26 },
+    star: { hatY: 15, hatSize: 24, accY: 50 },
+    heart: { hatY: 16, hatSize: 24, accY: 48 },
+    dino: { hatX: 44, hatY: 26, hatSize: 24, accX: 38, accY: 42, accSize: 24 },
+    dragon: { hatY: 16, hatSize: 26, accY: 54 },
+    panda: { hatY: 19, hatSize: 26, accY: 54, accSize: 26 },
+    poop: { hatY: 22, hatSize: 24, accY: 62, accSize: 26 },
+    monkey: { hatY: 20, accY: 50 },
+    penguin: { hatY: 20, accY: 46, accSize: 26 },
+    pizza: { hatY: 14, hatSize: 22, accY: 54 },
+    donut: { hatY: 20, accY: 48 },
+    cookie: { hatY: 20, accY: 48 },
+    avocado: { hatY: 16, hatSize: 24, accY: 44, accSize: 26 },
+    soccer: { hatY: 18, accY: 48 },
+    lightning: { hatY: 14, hatSize: 24, accY: 48 },
+    hamburger: { hatY: 20, accY: 48 },
+    rose: { hatY: 14, hatSize: 24, accY: 48 },
+    turtle: { hatX: 36, hatY: 22, hatSize: 24, accX: 32, accY: 40, accSize: 24 },
+  };
+  return adjs[baseId] || {};
+}
+
+export function getAvatarUrl(
+  name: string,
+  baseIdx: number,
+  hatIdx: number,
+  accIdx: number,
+  gradIdx: number = 0,
+  customHatXOffset: number = 0,
+  customHatYOffset: number = 0,
+  customHatSizeDelta: number = 0,
+  customAccXOffset: number = 0,
+  customAccYOffset: number = 0,
+  customAccSizeDelta: number = 0
+) {
   const base = AVATAR_BASES[baseIdx] || AVATAR_BASES[0];
   const hat = AVATAR_HATS[hatIdx] || AVATAR_HATS[0];
   const acc = AVATAR_ACCESSORIES[accIdx] || AVATAR_ACCESSORIES[0];
   const grad = AVATAR_GRADIENTS[gradIdx] || AVATAR_GRADIENTS[0];
 
   const stops = grad.stops;
+  
+  const adj = getAvatarAdjustments(base.id);
+  const hatX = (adj.hatX !== undefined ? adj.hatX : 50) + customHatXOffset;
+  const hatY = (adj.hatY !== undefined ? adj.hatY : hat.yOffset) + customHatYOffset;
+  const hatSize = Math.max(5, (adj.hatSize !== undefined ? adj.hatSize : hat.size) + customHatSizeDelta);
+  const accX = (adj.accX !== undefined ? adj.accX : 50) + customAccXOffset;
+  const accY = (adj.accY !== undefined ? adj.accY : acc.yOffset) + customAccYOffset;
+  const accSize = Math.max(5, (adj.accSize !== undefined ? adj.accSize : acc.size) + customAccSizeDelta);
   
   // Custom SVG outputted inline as a fast, premium SVG Data URI with clean emoji stacking
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
@@ -102,10 +153,10 @@ export function getAvatarUrl(name: string, baseIdx: number, hatIdx: number, accI
     ${base.emoji ? `<text x="50" y="${base.yOffset}" font-size="${base.size}" text-anchor="middle" dominant-baseline="middle" style="user-select: none;">${base.emoji}</text>` : ""}
     
     <!-- Accessories Overlay -->
-    ${acc.emoji ? `<text x="50" y="${acc.yOffset}" font-size="${acc.size}" text-anchor="middle" dominant-baseline="middle" style="user-select: none;">${acc.emoji}</text>` : ""}
+    ${acc.emoji ? `<text x="${accX}" y="${accY}" font-size="${accSize}" text-anchor="middle" dominant-baseline="middle" style="user-select: none;">${acc.emoji}</text>` : ""}
     
     <!-- Hat Overlay -->
-    ${hat.emoji ? `<text x="50" y="${hat.yOffset}" font-size="${hat.size}" text-anchor="middle" dominant-baseline="middle" style="user-select: none;">${hat.emoji}</text>` : ""}
+    ${hat.emoji ? `<text x="${hatX}" y="${hatY}" font-size="${hatSize}" text-anchor="middle" dominant-baseline="middle" style="user-select: none;">${hat.emoji}</text>` : ""}
   </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -122,14 +173,50 @@ export function parseNicknameAndAvatar(rawNickname: string) {
   }
 
   const [name, avatarCode] = rawNickname.split(":::", 2);
-  const parts = avatarCode.split("|").map(Number);
-  const baseIdx = parts[0] || 0;
-  const hatIdx = parts[1] || 0;
-  const accIdx = parts[2] || 0;
-  const gradIdx = parts[3] || 0;
+  const parts = avatarCode ? avatarCode.split("|").map(Number) : [];
+  const baseIdx = !parts[0] || isNaN(parts[0]) ? 0 : parts[0];
+  const hatIdx = !parts[1] || isNaN(parts[1]) ? 0 : parts[1];
+  const accIdx = !parts[2] || isNaN(parts[2]) ? 0 : parts[2];
+  const gradIdx = !parts[3] || isNaN(parts[3]) ? 0 : parts[3];
+
+  const hX = isNaN(parts[4]) ? 0 : parts[4];
+  const hY = isNaN(parts[5]) ? 0 : parts[5];
+  const hS = isNaN(parts[6]) ? 0 : parts[6];
+  const aX = isNaN(parts[7]) ? 0 : parts[7];
+  const aY = isNaN(parts[8]) ? 0 : parts[8];
+  const aS = isNaN(parts[9]) ? 0 : parts[9];
 
   return {
     displayName: name,
-    avatarUrl: getAvatarUrl(name, baseIdx, hatIdx, accIdx, gradIdx)
+    avatarUrl: getAvatarUrl(name, baseIdx, hatIdx, accIdx, gradIdx, hX, hY, hS, aX, aY, aS)
   };
+}
+
+export function ShapeIcon({ idx, className = "w-6 h-6 shrink-0 fill-current" }: { idx: number; className?: string }) {
+  if (idx === 0) {
+    return React.createElement(
+      "svg",
+      { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+      React.createElement("polygon", { points: "12,3 2,21 22,21" })
+    );
+  }
+  if (idx === 1) {
+    return React.createElement(
+      "svg",
+      { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+      React.createElement("polygon", { points: "12,2 22,12 12,22 2,12" })
+    );
+  }
+  if (idx === 2) {
+    return React.createElement(
+      "svg",
+      { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+      React.createElement("circle", { cx: "12", cy: "12", r: "10" })
+    );
+  }
+  return React.createElement(
+    "svg",
+    { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+    React.createElement("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" })
+  );
 }

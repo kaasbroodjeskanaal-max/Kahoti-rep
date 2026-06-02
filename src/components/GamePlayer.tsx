@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { GameSession, Player, Question } from "../types";
-import { Check, X, Award, Loader2, Sparkles, LogOut, Clock } from "lucide-react";
+import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { parseNicknameAndAvatar } from "../avatarUtils";
+import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
+import confetti from "canvas-confetti";
 
 interface GamePlayerProps {
   sessionId: string;
@@ -19,6 +20,83 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   const [hasAnswered, setHasAnswered] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [playerUid, setPlayerUid] = useState<string>("");
+  const [playerCountdown, setPlayerCountdown] = useState<number | string>(3);
+
+  const [allPlayersSorted, setAllPlayersSorted] = useState<{ id: string; nickname: string; score: number }[]>([]);
+  const [playerRank, setPlayerRank] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (session?.status === "ended" && sessionId && playerUid) {
+      const fetchScoresAndRanking = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("players")
+            .select("id, score, nickname")
+            .eq("session_id", sessionId)
+            .order("score", { ascending: false });
+
+          if (!error && data) {
+            setAllPlayersSorted(data.map(p => ({
+              id: p.id,
+              nickname: p.nickname,
+              score: p.score ?? 0
+            })));
+            
+            const index = data.findIndex(p => p.id === playerUid);
+            if (index !== -1) {
+              setPlayerRank(index + 1);
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching end-of-game ranks:", err);
+        }
+      };
+
+      fetchScoresAndRanking();
+    }
+  }, [session?.status, sessionId, playerUid]);
+
+  // Trigger local device confetti matching each progressive reveal stage
+  useEffect(() => {
+    if (session?.status === "ended" && playerRank !== null) {
+      const revealStage = session?.currentQuestionIndex ?? 0;
+      
+      // Stage 1: 5th place revealed
+      if (revealStage === 1 && playerRank === 5) {
+        confetti({ particleCount: 60, spread: 50, colors: ["#10b981", "#3b82f6"], origin: { y: 0.65 }, zIndex: 99999 });
+      }
+      // Stage 2: 4th place revealed
+      if (revealStage === 2 && playerRank === 4) {
+        confetti({ particleCount: 65, spread: 55, colors: ["#6366f1", "#ec4899"], origin: { y: 0.65 }, zIndex: 99999 });
+      }
+      // Stage 3: 3rd place revealed
+      if (revealStage === 3 && playerRank === 3) {
+        confetti({ particleCount: 100, spread: 65, colors: ["#d97706", "#f59e0b", "#ffffff"], origin: { y: 0.6 }, zIndex: 99999 });
+      }
+      // Stage 4: 2nd place revealed
+      if (revealStage === 4 && playerRank === 2) {
+        confetti({ particleCount: 120, spread: 75, colors: ["#cbd5e1", "#94a3b8", "#f1f5f9"], origin: { y: 0.6 }, zIndex: 99999 });
+      }
+      // Stage 5: 1st place revealed
+      if (revealStage === 5) {
+        if (playerRank === 1) {
+          // Epic winner cascade
+          const end = Date.now() + 3 * 1000;
+          const colors = ["#fbbf24", "#f59e0b", "#6366f1", "#ec4899"];
+          (function frame() {
+            confetti({ particleCount: 6, angle: 60, spread: 55, origin: { x: 0 }, colors, zIndex: 99999 });
+            confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 }, colors, zIndex: 99999 });
+            if (Date.now() < end) {
+              requestAnimationFrame(frame);
+            }
+          }());
+        } else {
+          // Normal celebration for other players
+          confetti({ particleCount: 40, spread: 60, colors: ["#a78bfa", "#f472b6"], origin: { y: 0.75 }, zIndex: 99999 });
+        }
+      }
+    }
+  }, [session?.status, playerRank, session?.currentQuestionIndex]);
 
   // Get active user ID securely using Supabase auth with dynamic local storage fallback
   useEffect(() => {
@@ -140,10 +218,21 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     };
   }, [sessionId, playerUid]);
 
-  // Handle countdown resets
+  // Handle countdown resets & manage dynamic countdown values (3, 2, 1, GO!)
   useEffect(() => {
     if (session?.status === "countdown") {
       setHasAnswered(false);
+      setPlayerCountdown(3);
+      const countdownInterval = setInterval(() => {
+        setPlayerCountdown((prev) => {
+          if (prev === 3) return 2;
+          if (prev === 2) return 1;
+          if (prev === 1) return "GO!";
+          clearInterval(countdownInterval);
+          return "GO!";
+        });
+      }, 1000);
+      return () => clearInterval(countdownInterval);
     }
   }, [session?.status, session?.currentQuestionIndex]);
 
@@ -172,8 +261,43 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     }
   };
 
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const isAnsweringOpen = session?.status === "question";
+
+  useEffect(() => {
+    if (session?.status === "question" && session?.questionStartTime) {
+      const updateTimer = () => {
+        const start = new Date(session.questionStartTime!).getTime();
+        const now = Date.now();
+        const elapsedMs = now - start;
+        const duration = session.questionDuration ?? 20;
+        setSecondsLeft(Math.max(0, duration - Math.floor(elapsedMs / 1000)));
+      };
+
+      updateTimer();
+      const timerInterval = setInterval(updateTimer, 100);
+      return () => clearInterval(timerInterval);
+    }
+  }, [session?.status, session?.questionStartTime, session?.questionDuration]);
+
   const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
   const activeQuestion = questions[currentQuestionIdx];
+
+  const getPointsEarnedForThisQuestion = () => {
+    if (!activeQuestion || !self) return 0;
+    const isCorrect = self.currentAnswerIndex === activeQuestion.correctOptionIndex;
+    if (!isCorrect) return 0;
+
+    const maxPoints = activeQuestion.points || 1000;
+    const responseTime = self.currentAnswerTime || 0;
+    const timeLimitMs = (activeQuestion.timeLimit || 20) * 1000;
+    const speedRatio = Math.min(1, Math.max(0, responseTime / timeLimitMs));
+    const pointsEarned = Math.round(maxPoints * (1 - (speedRatio / 2)));
+
+    const currentStreak = self.streak;
+    const streakBonus = currentStreak > 2 ? Math.min((currentStreak - 2) * 50, 250) : 0;
+    return pointsEarned + streakBonus;
+  };
 
   const optionColors = [
     "bg-red-500 hover:bg-red-600 active:bg-red-750",
@@ -185,11 +309,11 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   const shapes = ["▲", "♦", "●", "■"];
 
   return (
-    <div className="min-h-[85vh] bg-slate-50 flex flex-col justify-between p-4 font-sans selection:bg-indigo-100">
+    <div className="min-h-[85vh] bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-colors duration-250">
       {isLoading || !playerUid ? (
         <div className="flex-1 flex flex-col items-center justify-center py-20">
-          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-          <p className="text-gray-500 text-sm">Deelnemen aan spel...</p>
+          <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
+          <p className="text-gray-500 dark:text-slate-400 text-sm">Deelnemen aan spel...</p>
         </div>
       ) : (
         <AnimatePresence mode="wait">
@@ -219,7 +343,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               </div>
 
               <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-3 rounded-2xl border border-indigo-100 font-bold justify-center font-mono w-full">
-                Code: {session.code.slice(0, 3)} {session.code.slice(3)}
+                Code: {String(session?.code || "").padStart(6, "0").slice(0, 3)} {String(session?.code || "").padStart(6, "0").slice(3)}
               </div>
 
               <button
@@ -235,17 +359,48 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
           {session?.status === "countdown" && (
             <motion.div
               key="countdown"
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-12"
+              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-6 px-4"
             >
-              <div className="text-lg font-bold text-indigo-600 tracking-wider uppercase">Maak je klaaarr!</div>
-              <h1 className="text-4xl font-black font-display text-slate-850">
-                Vraag {currentQuestionIdx + 1} komt eraan
-              </h1>
-              <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center shadow-md animate-ping text-white text-3xl font-black">
-                ⏱
+              <div className="space-y-1">
+                <span className="inline-block px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider">
+                  Bereid je voor!
+                </span>
+                <p className="text-slate-400 text-xs font-bold font-mono tracking-wider">
+                  VRAAG {currentQuestionIdx + 1} VAN DE {session.totalQuestions}
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-750 text-white rounded-3xl p-8 border-b-6 border-indigo-800 shadow-lg max-w-sm w-full text-center space-y-3">
+                <p className="text-[10px] text-indigo-200 font-extrabold tracking-widest uppercase">
+                  {currentQuestionIdx === 0 ? "QUIZ" : "VRAAG"}
+                </p>
+                <h2 className="font-extrabold font-display text-2xl md:text-3xl text-white leading-tight">
+                  {currentQuestionIdx === 0 
+                    ? (session?.quizTitle || "Inladen...")
+                    : (activeQuestion?.questionText || "Volgende vraag...")}
+                </h2>
+              </div>
+
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-24 h-24 rounded-full bg-indigo-500/10 animate-ping" />
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    key={playerCountdown}
+                    initial={{ scale: 0.4, opacity: 0 }}
+                    animate={{ scale: 1.1, opacity: 1 }}
+                    exit={{ scale: 1.4, opacity: 0 }}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center shadow-md font-black text-2xl ${
+                      playerCountdown === "GO!" 
+                        ? "bg-emerald-500 text-white animate-pulse" 
+                        : "bg-indigo-600 text-white"
+                    }`}
+                  >
+                    {playerCountdown}
+                  </motion.div>
+                </AnimatePresence>
               </div>
             </motion.div>
           )}
@@ -259,26 +414,28 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col justify-between space-y-4"
             >
-              {/* Top brief */}
-              <div className="flex flex-col gap-3 bg-white border border-slate-100 p-5 rounded-3xl shadow-xs">
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Vraag {currentQuestionIdx + 1}</p>
-                    <h3 className="font-bold text-slate-800 font-display text-lg leading-snug">
-                      {activeQuestion.questionText}
-                    </h3>
-                  </div>
-                  <div className="bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl text-indigo-700 font-bold font-mono text-sm flex items-center gap-1.5 shrink-0">
-                    <Clock className="w-4 h-4" /> {activeQuestion.timeLimit}s
+              {/* High-visibility Dynamic Question Display Header */}
+              <div className="bg-slate-900 text-white rounded-3xl p-5 md:p-6 flex flex-col gap-3 border-b-4 border-slate-950 shadow-md">
+                <div className="flex justify-between items-center bg-white/5 px-2.5 py-1 rounded-full border border-white/10 self-start w-full">
+                  <span className="text-[10px] text-indigo-300 font-black tracking-widest uppercase">
+                    VRAAG {currentQuestionIdx + 1} / {session.totalQuestions}
+                  </span>
+                  <div className="bg-white/10 border border-white/15 px-2 py-0.5 rounded-full text-white font-bold font-mono text-[10px] flex items-center gap-1 shrink-0">
+                    <Clock className="w-3 h-3 text-indigo-300 animate-pulse" /> {secondsLeft}s
                   </div>
                 </div>
+
+                <h1 className="text-lg sm:text-xl font-bold font-display text-white leading-snug">
+                  {activeQuestion.questionText}
+                </h1>
+
                 {activeQuestion.imageUrl && (
-                  <div className="flex justify-center mt-2">
+                  <div className="flex justify-center max-h-36 overflow-hidden rounded-xl border border-white/5 bg-black/20">
                     <img 
                       src={activeQuestion.imageUrl} 
-                      alt="Vraag afbeelding" 
+                      alt="Question Context" 
                       referrerPolicy="no-referrer"
-                      className="max-h-32 object-contain rounded-xl border border-slate-200 shadow-sm" 
+                      className="object-contain" 
                     />
                   </div>
                 )}
@@ -286,20 +443,30 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
 
               {/* Action Buttons Interface */}
               {!hasAnswered ? (
-                <div className="flex-1 grid grid-cols-2 gap-3 pb-4">
-                  {activeQuestion.options.map((option, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSelectOption(idx)}
-                      className={`w-full rounded-3xl text-white font-display text-3xl font-black flex flex-col items-center justify-center p-6 gap-2 border-b-6 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer ${optionColors[idx]}`}
-                    >
-                      <span className="text-5xl">{shapes[idx]}</span>
-                      <span className="text-sm font-bold block max-w-full truncate px-2 leading-normal">
-                        {option}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                !isAnsweringOpen ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 bg-slate-900 border border-slate-950 text-white rounded-3xl p-8 shadow-md">
+                    <div className="w-12 h-12 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin mb-2" />
+                    <h3 className="text-xl font-extrabold font-display text-indigo-300">Lees de vraag goed! 👀</h3>
+                    <p className="text-slate-400 text-xs">
+                      De antwoorden verschijnen zo meteen op je scherm...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
+                    {activeQuestion.options.map((option, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSelectOption(idx)}
+                        className={`w-full rounded-2xl text-white font-display text-xl font-black flex items-center justify-start px-6 py-4 gap-4 border-b-6 shadow-xs hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer ${optionColors[idx]}`}
+                      >
+                        <ShapeIcon idx={idx} className="w-8 h-8 shrink-0 fill-white" />
+                        <span className="text-base font-bold text-left block max-w-full leading-normal truncate pr-2">
+                          {option}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )
               ) : (
                 /* WAITING TIMER STATE FOR FASTER RESPONDERS */
                 <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 bg-white border border-slate-100 rounded-3xl p-8 shadow-xs">
@@ -341,7 +508,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                   <div className="bg-emerald-600/45 p-4 rounded-2xl border border-white/10 inline-block">
                     <p className="text-xs text-emerald-250">Punten & Streak update</p>
                     <h3 className="text-2xl font-mono font-bold text-white flex items-center gap-1 justify-center">
-                      <Sparkles className="w-5 h-5 text-yellow-300 inline animate-spin-slow" /> +{self.score > 0 ? "Berekend door host" : "..."}
+                      <Sparkles className="w-5 h-5 text-yellow-300 inline animate-spin-slow" /> +{getPointsEarnedForThisQuestion()} pt
                     </h3>
                   </div>
 
@@ -371,6 +538,19 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                   </div>
                 </div>
               )}
+
+              {/* Candidate current points indicators */}
+              <div className="mt-4 bg-slate-900 text-white p-4.5 rounded-3xl border-b-4 border-slate-950 flex justify-between items-center shadow-lg w-full max-w-sm mx-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🏆</span>
+                  <span className="text-xs text-slate-300 font-extrabold uppercase tracking-widest">
+                    Jouw Totaalscore
+                  </span>
+                </div>
+                <span className="text-xl font-black font-mono text-indigo-400">
+                  {self.score} pt
+                </span>
+              </div>
 
               <p className="text-center text-gray-400 text-xs mt-6">Kijk op het grote scherm van de host voor de scoreverdeling!</p>
             </motion.div>
@@ -406,38 +586,310 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
           )}
 
           {/* FINAL RESULTS GRAPH/PODIUM CLIENT DISPLAY */}
-          {session?.status === "ended" && self && (
-            <motion.div
-              key="ended"
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
-            >
-              <div className="w-24 h-24 bg-yellow-50 border border-yellow-100 rounded-full flex items-center justify-center text-yellow-500 shadow-md">
-                <Award className="w-12 h-12" />
-              </div>
+          {session?.status === "ended" && self && (() => {
+            const revealStage = session?.currentQuestionIndex ?? 0;
 
-              <div className="space-y-2">
-                <h1 className="text-3xl font-black font-display text-slate-800">Einde van de Quiz!</h1>
-                <p className="text-gray-500 text-sm">
-                  De quiz is afgelopen. Bekijk het podium op het scherm van de host om te zien of je de top 3 hebt bereikt!
-                </p>
-              </div>
+            // Check if this player's rank is officially revealed yet
+            let isMyRankRevealed = false;
+            if (playerRank !== null) {
+              if (playerRank === 5 && revealStage >= 1) isMyRankRevealed = true;
+              else if (playerRank === 4 && revealStage >= 2) isMyRankRevealed = true;
+              else if (playerRank === 3 && revealStage >= 3) isMyRankRevealed = true;
+              else if (playerRank === 2 && revealStage >= 4) isMyRankRevealed = true;
+              else if (playerRank === 1 && revealStage >= 5) isMyRankRevealed = true;
+              else if (playerRank > 5 && revealStage >= 5) isMyRankRevealed = true;
+            }
 
-              <div className="bg-slate-900 text-white rounded-2xl p-5 w-full space-y-1 border-b-4 border-slate-950 shadow-sm font-display">
-                <p className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Mijn Eindscore</p>
-                <h2 className="text-3xl font-black font-mono text-white">{self.score} pt</h2>
-              </div>
+            // If my rank is NOT yet revealed, show the Live Reveal Arena!
+            if (!isMyRankRevealed) {
+              return (
+                <motion.div
+                  key="ended-live-reveal-arena"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex-1 flex flex-col space-y-6 max-w-md mx-auto py-6 px-4"
+                >
+                  <div className="text-center space-y-2">
+                    <span className="bg-indigo-500/10 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
+                      Live Finale Onthulling
+                    </span>
+                    <h1 className="text-3xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                      Op welke plaats sta jij?
+                    </h1>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                      De host is nu live de eindstand aan het onthullen! Kijk mee hoe de slots openen... 🤫
+                    </p>
+                  </div>
 
-              <button
-                onClick={onExit}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md"
+                  {/* Real-time progression stats for the 5 spots */}
+                  <div className="space-y-3 bg-slate-900/40 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/10 shadow-lg backdrop-blur-xs">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left px-1">
+                      Finale Standen
+                    </p>
+                    
+                    {[1, 2, 3, 4, 5].map((place) => {
+                      // Determine if this place is currently revealed
+                      let isPlaceRevealed = false;
+                      if (place === 5 && revealStage >= 1) isPlaceRevealed = true;
+                      if (place === 4 && revealStage >= 2) isPlaceRevealed = true;
+                      if (place === 3 && revealStage >= 3) isPlaceRevealed = true;
+                      if (place === 2 && revealStage >= 4) isPlaceRevealed = true;
+                      if (place === 1 && revealStage >= 5) isPlaceRevealed = true;
+
+                      const playerAtPlace = allPlayersSorted[place - 1];
+
+                      if (isPlaceRevealed && playerAtPlace) {
+                        const { displayName: pName, avatarUrl: pAvatar } = parseNicknameAndAvatar(playerAtPlace.nickname || "");
+                        const isYou = playerRank === place;
+                        return (
+                          <motion.div
+                            key={`place-${place}`}
+                            initial={{ x: -20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                              isYou
+                                ? "bg-indigo-650/30 border-indigo-500 shadow-md"
+                                : "bg-slate-900/60 border-slate-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative">
+                                <img src={pAvatar} alt="avatar" className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700" />
+                                <span className="absolute -top-1 -left-1 bg-indigo-650 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white text-white">
+                                  {place}
+                                </span>
+                              </div>
+                              <div className="min-w-0 text-left">
+                                <p className="font-bold text-slate-205 text-sm truncate flex items-center gap-1.5">
+                                  <span className="text-white">{pName.replace(/[:|~]/g, "")}</span>
+                                  {isYou && (
+                                    <span className="bg-indigo-500 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded-sm">Jij!</span>
+                                  )}
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                  {place === 1 ? "🏆 Winnaar" : place <= 3 ? "🥈 Podium" : "🎖️ Finalist"}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="font-mono text-xs font-extrabold text-indigo-400">
+                              {playerAtPlace.score} pt
+                            </span>
+                          </motion.div>
+                        );
+                      } else {
+                        return (
+                          <div
+                            key={`place-${place}`}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-950/20 border border-slate-800/40 opacity-50"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-600 text-xs">
+                                🔒
+                              </div>
+                              <div className="text-left">
+                                <p className="text-sm font-bold text-slate-500">???</p>
+                                <p className="text-[10px] text-slate-600">Nog niet onthuld</p>
+                              </div>
+                            </div>
+                            <span className="font-mono text-xs font-bold text-slate-700">??? pt</span>
+                          </div>
+                        );
+                      }
+                    })}
+                  </div>
+
+                  <div className="bg-slate-900/80 dark:bg-slate-950/80 text-slate-400 rounded-2xl p-4 flex items-center justify-center gap-3 border border-slate-800">
+                    <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                    <span className="font-bold text-xs uppercase tracking-widest font-mono text-white">Lobby Onthulling Live...</span>
+                  </div>
+                </motion.div>
+              );
+            }
+
+            // 3. YOUR RANK IS REVEALED! SHOW INDIVIDUAL CONGRATULATIONS WITH AWESOME VISUALS!
+            if (playerRank === 1) {
+              return (
+                <motion.div
+                  key="ended-winner"
+                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
+                >
+                  <div className="w-32 h-32 bg-amber-500/20 border-4 border-amber-400 rounded-full flex items-center justify-center text-amber-400 shadow-2xl relative">
+                    <Trophy className="w-16 h-16 animate-bounce text-amber-400" />
+                    <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full p-1.5 animate-pulse">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
+                      🏆 EERSTE PLAATS - CHAMPION! 🏆
+                    </p>
+                    <h1 className="text-4xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                      EINDWINNAAR!
+                    </h1>
+                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                      Gefeliciteerd {displayName}! Je bent de absolute winnaar geworden met een schitterende score van {self.score} pt!
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={onExit}
+                    className="w-full bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4 animate-pulse"
+                  >
+                    Klaar en Sluiten 🎉
+                  </button>
+                </motion.div>
+              );
+            }
+
+            if (playerRank === 2) {
+              return (
+                <motion.div
+                  key="ended-silver"
+                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
+                >
+                  <div className="w-28 h-28 bg-slate-100/10 border-4 border-slate-300 rounded-full flex items-center justify-center text-slate-300 shadow-2xl relative animate-bounce animate-duration-1000">
+                    <Award className="w-14 h-14 text-slate-300" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-slate-300 text-xs font-black uppercase tracking-widest font-mono">
+                      🥈 TWEEDE PLAATS - SILVER! 🥈
+                    </p>
+                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                      Fantastisch!
+                    </h1>
+                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                      Gefeliciteerd {displayName}! Je hebt een waanzinnige 2e plaats bemachtigd op het podium met {self.score} pt!
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={onExit}
+                    className="w-full bg-indigo-650 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
+                  >
+                    Klaar en Sluiten 🎉
+                  </button>
+                </motion.div>
+              );
+            }
+
+            if (playerRank === 3) {
+              return (
+                <motion.div
+                  key="ended-bronze"
+                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
+                >
+                  <div className="w-28 h-28 bg-amber-950/20 border-4 border-amber-600 rounded-full flex items-center justify-center text-amber-500 shadow-2xl relative animate-bounce animate-duration-1000">
+                    <Award className="w-14 h-14 text-amber-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-amber-500 text-xs font-black uppercase tracking-widest font-mono">
+                      🥉 DERDE PLAATS - BRONZE! 🥉
+                    </p>
+                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                      Super gedaan!
+                    </h1>
+                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                      Mooi werk {displayName}! Je eindigt op een eervolle 3e plaats en claimt brons met {self.score} pt!
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={onExit}
+                    className="w-full bg-indigo-655 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
+                  >
+                    Klaar en Sluiten 🎉
+                  </button>
+                </motion.div>
+              );
+            }
+
+            if (playerRank === 4 || playerRank === 5) {
+              return (
+                <motion.div
+                  key="ended-finalist"
+                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
+                >
+                  <div className="w-28 h-28 bg-indigo-950/40 border-4 border-indigo-400 rounded-full flex items-center justify-center text-indigo-400 shadow-2xl relative animate-bounce animate-duration-1200">
+                    <Award className="w-14 h-14 text-indigo-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest font-mono">
+                      🎖️ GEFELICITEERD - FINALIST! 🎖️
+                    </p>
+                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                      {playerRank}e Plaats!
+                    </h1>
+                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                      Wauw {displayName}! Je bent geëindigd als een van de officiële top finalisten (de {playerRank}e plaats!) met een score van {self.score} pt! Wat een prestatie!
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={onExit}
+                    className="w-full bg-indigo-655 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
+                  >
+                    Klaar en Sluiten 🎉
+                  </button>
+                </motion.div>
+              );
+            }
+
+            // For ranks 6 and below
+            return (
+              <motion.div
+                key="ended-finished-others"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
               >
-                Sluiten en Terug
-              </button>
-            </motion.div>
-          )}
+                <div className="w-24 h-24 bg-teal-950/25 border-2 border-teal-500 rounded-full flex items-center justify-center text-teal-400 shadow-md">
+                  <Award className="w-12 h-12" />
+                </div>
+
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-black font-display text-slate-800 dark:text-white">Einde van de Quiz!</h1>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    Gefeliciteerd met het volbrengen van alle vragen! Jouw score en positie zijn hieronder zichtbaar.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 w-full">
+                  {playerRank !== null && (
+                    <div className="bg-linear-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-5 w-full space-y-1 border-b-4 border-emerald-700 shadow-md font-display">
+                      <p className="text-xs text-emerald-100 font-bold uppercase tracking-widest">Jouw Eindpositie</p>
+                      <h2 className="text-3.5xl font-black font-mono">
+                        {playerRank}e <span className="text-lg font-sans font-medium">plaats</span>
+                      </h2>
+                      <p className="text-xs text-emerald-100/80 font-sans">
+                        van de {allPlayersSorted.length} Deelnemers
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-900 dark:bg-slate-950 text-white rounded-2xl p-5 w-full space-y-1 border-b-4 border-slate-950 border border-slate-800 shadow-sm font-display">
+                    <p className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Mijn Eindscore</p>
+                    <h2 className="text-3xl font-black font-mono text-white">{self.score} pt</h2>
+                  </div>
+                </div>
+
+                <button
+                  onClick={onExit}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md mt-4"
+                >
+                  Sluiten en Terug
+                </button>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
       )}
     </div>
