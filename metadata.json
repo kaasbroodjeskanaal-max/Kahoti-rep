@@ -1,6 +1,6 @@
 {
-  "name": "Realtime Quiz App",
-  "description": "Een realtime Kahoot-achtige quiz app met een scoresysteem, lobbycode en leaderboard.",
+  "name": "Kahoti",
+  "description": "Realtime Quiz Builder & Playroom",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

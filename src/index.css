@@ -6,6 +6,8 @@
   --font-display: "Space Grotesk", sans-serif;
 }
 
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom background styles for playfulness and luxury */
 body {
   background-color: #f8fafc;

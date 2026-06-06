@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
-import { Quiz, GameSession, Player } from "../types";
+import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
 import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
@@ -25,6 +25,7 @@ interface QuestionHistoryRecord {
   questionIndex: number;
   questionText: string;
   correctOptionIndex: number;
+  correctOptionIndices?: number[];
   options: string[];
   playerAnswers: PlayerAnswerRecord[];
   answeredCorrectCount: number;
@@ -244,6 +245,12 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
 
   // 3. Game State Managers & Clock Counters
   const currentQuestion = session ? quiz.questions[session.currentQuestionIndex] : null;
+  const firstQ = quiz.questions[0];
+  const hostTheme = quiz.theme || firstQ?.theme || "default";
+  const lobbyTheme = quiz.lobbyTheme || firstQ?.lobbyTheme || "default";
+  const activeTheme = session?.status === "lobby"
+    ? getThemeConfig(lobbyTheme)
+    : getThemeConfig(hostTheme);
 
   // Active Timer counting down the seconds during the "question" state
   useEffect(() => {
@@ -307,19 +314,51 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
         // Build detailed correctness history metrics for this question
         const currentQIndex = session.currentQuestionIndex;
         const playerAnswers: PlayerAnswerRecord[] = latestPlayers.map((p) => {
-          const isCorrect = p.current_answer_index === currentQuestion.correctOptionIndex;
-          
-          // points calculation mimicking calculatePlayerPointsAndStreak
-          const maxPoints = currentQuestion.points || 1000;
-          const responseTime = p.current_answer_time || 0;
-          const timeLimitMs = (currentQuestion.timeLimit || 20) * 1000;
-          const speedRatio = Math.min(1, Math.max(0, responseTime / timeLimitMs));
-          const pointsEarned = isCorrect ? Math.round(maxPoints * (1 - (speedRatio / 2))) : 0;
-          
-          const currentStreak = p.streak ?? 0;
-          const newStreak = isCorrect ? currentStreak + 1 : 0;
-          const streakBonus = newStreak > 2 ? Math.min((newStreak - 2) * 50, 250) : 0;
-          const finalEarned = pointsEarned > 0 ? pointsEarned + streakBonus : 0;
+          let isCorrect = checkIsCorrect(p.current_answer_index, currentQuestion);
+          let finalEarned = 0;
+          let scoreAfter = p.score ?? 0;
+
+          if (currentQuestion.questionType === "wheel_spin") {
+            const selectedIndex = p.current_answer_index;
+            isCorrect = selectedIndex !== null && selectedIndex !== undefined && selectedIndex >= 0;
+            if (isCorrect && selectedIndex !== null && selectedIndex !== undefined && selectedIndex < currentQuestion.options.length) {
+              const optionText = currentQuestion.options[selectedIndex];
+              const textToAnalyze = optionText.toLowerCase();
+              let pointsEarned = 0;
+              if (textToAnalyze.includes("bankroet") || textToAnalyze.includes("verlies alles") || textToAnalyze.includes("bankrupt") || textToAnalyze.includes("alles kwijt")) {
+                scoreAfter = 0;
+                pointsEarned = -(p.score ?? 0);
+              } else if (textToAnalyze.includes("verdubbel") || textToAnalyze.includes("double") || textToAnalyze.includes("x2") || textToAnalyze.includes("vermenigvuldig")) {
+                pointsEarned = p.score ?? 0;
+                scoreAfter = (p.score ?? 0) * 2;
+              } else {
+                const numberMatches = optionText.match(/[-+]?\s*\d+/g);
+                if (numberMatches && numberMatches.length > 0) {
+                  const parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
+                  if (!isNaN(parsedValue)) {
+                    pointsEarned = parsedValue;
+                    scoreAfter = Math.max(0, (p.score ?? 0) + pointsEarned);
+                  }
+                } else {
+                  pointsEarned = 300;
+                  scoreAfter = (p.score ?? 0) + pointsEarned;
+                }
+              }
+              finalEarned = pointsEarned;
+            }
+          } else {
+            const maxPoints = currentQuestion.points || 1000;
+            const responseTime = p.current_answer_time || 0;
+            const timeLimitMs = (currentQuestion.timeLimit || 20) * 1000;
+            const speedRatio = Math.min(1, Math.max(0, responseTime / timeLimitMs));
+            const pointsEarned = isCorrect ? Math.round(maxPoints * (1 - (speedRatio / 2))) : 0;
+
+            const currentStreak = p.streak ?? 0;
+            const newStreak = isCorrect ? currentStreak + 1 : 0;
+            const streakBonus = newStreak > 2 ? Math.min((newStreak - 2) * 50, 250) : 0;
+            finalEarned = pointsEarned > 0 ? pointsEarned + streakBonus : 0;
+            scoreAfter = (p.score ?? 0) + finalEarned;
+          }
 
           return {
             playerId: p.id,
@@ -327,7 +366,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
             answeredIndex: p.current_answer_index,
             isCorrect,
             scoreBefore: p.score ?? 0,
-            scoreAfter: (p.score ?? 0) + finalEarned,
+            scoreAfter,
             pointsEarned: finalEarned,
           };
         });
@@ -340,6 +379,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
           questionIndex: currentQIndex,
           questionText: currentQuestion.questionText,
           correctOptionIndex: currentQuestion.correctOptionIndex,
+          correctOptionIndices: currentQuestion.correctOptionIndices,
           options: currentQuestion.options,
           playerAnswers,
           answeredCorrectCount,
@@ -421,7 +461,43 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
   const calculatePlayerPointsAndStreak = (player: Player) => {
     if (!currentQuestion) return { newScore: player.score, newStreak: 0, pointsEarned: 0 };
 
-    const isCorrect = player.currentAnswerIndex === currentQuestion.correctOptionIndex;
+    if (currentQuestion.questionType === "wheel_spin") {
+      const selectedIndex = player.currentAnswerIndex;
+      const hasAnswered = selectedIndex !== null && selectedIndex !== undefined && selectedIndex >= 0;
+      if (hasAnswered && selectedIndex !== null && selectedIndex !== undefined && selectedIndex < currentQuestion.options.length) {
+        const optionText = currentQuestion.options[selectedIndex];
+        const textToAnalyze = optionText.toLowerCase();
+        let pointsEarned = 0;
+        let scoreAfter = player.score ?? 0;
+        if (textToAnalyze.includes("bankroet") || textToAnalyze.includes("verlies alles") || textToAnalyze.includes("bankrupt") || textToAnalyze.includes("alles kwijt")) {
+          scoreAfter = 0;
+          pointsEarned = -(player.score ?? 0);
+        } else if (textToAnalyze.includes("verdubbel") || textToAnalyze.includes("double") || textToAnalyze.includes("x2") || textToAnalyze.includes("vermenigvuldig")) {
+          pointsEarned = player.score ?? 0;
+          scoreAfter = (player.score ?? 0) * 2;
+        } else {
+          const numberMatches = optionText.match(/[-+]?\s*\d+/g);
+          if (numberMatches && numberMatches.length > 0) {
+            const parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
+            if (!isNaN(parsedValue)) {
+              pointsEarned = parsedValue;
+              scoreAfter = Math.max(0, (player.score ?? 0) + pointsEarned);
+            }
+          } else {
+            pointsEarned = 300;
+            scoreAfter = (player.score ?? 0) + pointsEarned;
+          }
+        }
+        return {
+          newScore: scoreAfter,
+          newStreak: player.streak,
+          pointsEarned: pointsEarned,
+        };
+      }
+      return { newScore: player.score, newStreak: player.streak, pointsEarned: 0 };
+    }
+
+    const isCorrect = checkIsCorrect(player.currentAnswerIndex, currentQuestion);
     let pointsEarned = 0;
 
     if (isCorrect) {
@@ -676,7 +752,53 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col justify-between">
+    <div className={`min-h-screen ${activeTheme.bgClasses} font-sans flex flex-col justify-between transition-all duration-700 relative`}>
+      {/* Decorative background overlays for themes */}
+      {activeTheme.name !== "Standaard" && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          {activeTheme.name === "Winter" && (
+            <>
+              <div className="absolute top-[10%] left-[15%] text-3xl animate-bounce">❄️</div>
+              <div className="absolute top-[35%] left-[85%] text-2xl animate-bounce">❄️</div>
+              <div className="absolute top-[75%] left-[8%] text-4xl animate-bounce">❄️</div>
+              <div className="absolute top-[18%] left-[55%] text-xl animate-bounce">❄️</div>
+              <div className="absolute top-[65%] left-[70%] text-3xl animate-bounce">❄️</div>
+            </>
+          )}
+          {activeTheme.name === "Zomer" && (
+            <>
+              <div className="absolute top-[8%] left-[22%] text-4xl animate-spin duration-10000">☀️</div>
+              <div className="absolute top-[20%] left-[80%] text-4xl animate-pulse">🌴</div>
+              <div className="absolute bottom-[12%] left-[6%] text-3xl">🍹</div>
+              <div className="absolute bottom-[18%] right-[12%] text-4xl animate-bounce">🍦</div>
+            </>
+          )}
+          {activeTheme.name === "Halloween" && (
+            <>
+              <div className="absolute top-[12%] left-[12%] text-4xl animate-bounce">👻</div>
+              <div className="absolute top-[45%] left-[82%] text-4xl animate-pulse">🎃</div>
+              <div className="absolute bottom-[18%] left-[40%] text-4xl animate-bounce">🦇</div>
+              <div className="absolute top-[28%] left-[68%] text-3xl">🕸️</div>
+            </>
+          )}
+          {activeTheme.name === "Kosmisch" && (
+            <>
+              <div className="absolute top-[12%] left-[22%] text-xl animate-pulse">⭐</div>
+              <div className="absolute top-[48%] left-[85%] text-2xl animate-pulse">✨</div>
+              <div className="absolute bottom-[18%] left-[12%] text-4xl animate-pulse">🪐</div>
+              <div className="absolute top-[68%] left-[58%] text-2xl animate-pulse">🌟</div>
+            </>
+          )}
+          {activeTheme.name === "Neon Retro" && (
+            <>
+              <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_95%,rgba(244,63,94,0.15)_95%)] bg-[size:100%_40px] animate-pulse" />
+              <div className="absolute top-[12%] left-[12%] text-3xl animate-pulse">⚡</div>
+              <div className="absolute top-[58%] left-[85%] text-3xl animate-pulse">🕹️</div>
+            </>
+          )}
+        </div>
+      )}
+
       {isInitializing ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
           <RefreshCw className="w-12 h-12 text-indigo-400 animate-spin mb-4" />
@@ -685,10 +807,18 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
       ) : (
         <>
           {/* Header */}
-          <header className="bg-slate-950 px-8 py-4 border-b border-slate-800 flex justify-between items-center">
-            <div>
-              <span className="text-xs text-indigo-400 tracking-wider font-bold uppercase">Hosten</span>
-              <h2 className="text-xl font-bold font-display text-slate-100 line-clamp-1">{quiz.title}</h2>
+          <header className="bg-slate-950 px-8 py-3 border-b border-slate-800 flex justify-between items-center relative z-10">
+            <div className="flex items-center gap-3">
+              <img 
+                src="https://cdn.imageurlgenerator.com/uploads/9df1cd72-ee23-4abc-8f99-c7bf3a38bebc.jpeg"
+                alt="Kahoti Logo"
+                className="w-10 h-10 object-cover rounded-xl border border-slate-800 shadow-xs shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <div>
+                <span className="text-xs text-indigo-400 tracking-wider font-bold uppercase">Hosten</span>
+                <h2 className="text-xl font-bold font-display text-slate-100 line-clamp-1">{quiz.title}</h2>
+              </div>
             </div>
             <button
               onClick={onExit}
@@ -698,7 +828,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
             </button>
           </header>
 
-          <main className="flex-1 flex flex-col justify-center max-w-7xl w-full mx-auto p-6 md:p-8 shrink-0">
+          <main className="flex-1 flex flex-col justify-center max-w-7xl w-full mx-auto p-6 md:p-8 shrink-0 relative z-10">
             <AnimatePresence mode="wait">
               {/* STATUS: LOBBY */}
               {session?.status === "lobby" && (
@@ -840,8 +970,10 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   {/* Question Prompt */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-3xl px-8 py-10 text-center space-y-4 shadow-xs">
-                    <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase">MEERKEUZEVRAAG</p>
+                  <div className={`${activeTheme.cardBg} rounded-3xl px-8 py-10 text-center space-y-4 shadow-xl relative z-10`}>
+                    <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase">
+                      {currentQuestion.questionType === "wheel_spin" ? "KANS-GOKRONDE 🎰" : "MEERKEUZEVRAAG"}
+                    </p>
                     <h1 className="text-3xl md:text-4xl font-extrabold text-white font-display leading-snug">
                       {currentQuestion.questionText}
                     </h1>
@@ -858,7 +990,37 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   {/* Options Large Grid */}
-                  {!isAnsweringOpen ? (
+                  {currentQuestion.questionType === "wheel_spin" ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center flex flex-col justify-center items-center gap-6 min-h-[300px] relative overflow-hidden">
+                      {/* Ambient background glow */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-indigo-500/15 blur-3xl" />
+                      
+                      {/* Spinning wheel icon animation */}
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                        className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-dashed border-amber-500/60 flex items-center justify-center text-5xl md:text-6xl filter drop-shadow-[0_0_15px_rgba(234,179,8,0.2)] bg-slate-950/45"
+                      >
+                        🎰
+                      </motion.div>
+
+                      <div className="space-y-2 relative z-10">
+                        <h2 className="text-2xl md:text-3xl font-black text-amber-400 font-display uppercase tracking-wider animate-pulse">Draai aan het Rad! 🎯</h2>
+                        <p className="text-slate-300 text-sm max-w-md mx-auto leading-relaxed">
+                          Alle spelers mogen nu op hun eigen toestel aan het Rad van Fortuin draaien om hun score drastisch te beïnvloeden!
+                        </p>
+                      </div>
+
+                      {/* Display wheel options */}
+                      <div className="flex flex-wrap justify-center gap-3 mt-2 relative z-10">
+                        {currentQuestion.options.map((opt, i) => (
+                          <span key={i} className="px-3.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-xs font-mono font-bold text-slate-300">
+                            {opt}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : !isAnsweringOpen ? (
                     <div className="bg-slate-950/60 border-2 border-dashed border-indigo-900/40 rounded-3xl p-12 text-center flex flex-col justify-center items-center gap-4 animate-pulse min-h-[220px]">
                       <div className="w-12 h-12 rounded-full border-4 border-indigo-501 border-t-transparent animate-spin mb-2" />
                       <p className="text-indigo-300 font-black text-xl uppercase tracking-wider">
@@ -899,14 +1061,16 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   className="space-y-6"
                 >
                   <div className="text-center space-y-1">
-                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest">Resultaat</span>
+                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest">
+                      {currentQuestion.questionType === "wheel_spin" ? "Gokresultaten 🎰" : "Resultaat"}
+                    </span>
                     <h1 className="text-3xl font-black font-display text-white">
-                      Correcte antwoord is onthuld!
+                      {currentQuestion.questionType === "wheel_spin" ? "De geraspte uitkomsten van het gokrad!" : "Correcte antwoord is onthuld!"}
                     </h1>
                   </div>
 
                   {/* Question detail */}
-                  <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 text-center space-y-4">
+                  <div className={`${activeTheme.cardBg} p-6 rounded-3xl text-center space-y-4 shadow-xl relative z-10`}>
                     <h2 className="text-2xl font-bold font-display text-slate-100">
                       "{currentQuestion.questionText}"
                     </h2>
@@ -923,10 +1087,14 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   </div>
 
                   {/* Dynamic Stats Chart & options feedback */}
-                  <div className="grid md:grid-cols-2 gap-8 items-center bg-slate-950/50 p-6 md:p-8 border border-slate-800 rounded-3xl">
+                  <div className={`grid md:grid-cols-2 gap-8 items-center ${activeTheme.cardBg} p-6 md:p-8 rounded-3xl relative z-10 shadow-xl`}>
                     <div className="space-y-4">
                       {getStats().map((votes, idx) => {
-                        const isCorrectOption = idx === currentQuestion.correctOptionIndex;
+                        const isCorrectOption = currentQuestion.questionType === "wheel_spin"
+                          ? false
+                          : (currentQuestion.correctOptionIndices && currentQuestion.correctOptionIndices.length > 0
+                            ? currentQuestion.correctOptionIndices.includes(idx)
+                            : idx === currentQuestion.correctOptionIndex);
                         const percentage = totalActives > 0 ? (votes / totalActives) * 100 : 0;
                         return (
                           <div key={idx} className="space-y-2">
@@ -943,13 +1111,13 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                 )}
                               </span>
                               <span className="text-slate-400 font-mono">
-                                {votes} stem{votes === 1 ? "" : "men"} ({Math.round(percentage)}%)
+                                {votes} {currentQuestion.questionType === "wheel_spin" ? "keer geland" : `stem${votes === 1 ? "" : "men"}`} ({Math.round(percentage)}%)
                               </span>
                             </div>
                             <div className="w-full bg-slate-900 border border-slate-800 h-6 rounded-lg overflow-hidden flex">
                               <div
                                 className={`h-full transition-all duration-300 ${
-                                  isCorrectOption ? "bg-emerald-500" : "bg-indigo-950"
+                                  currentQuestion.questionType === "wheel_spin" ? "bg-amber-500" : (isCorrectOption ? "bg-emerald-500" : "bg-indigo-950")
                                 }`}
                                 style={{ width: `${percentage}%` }}
                               />
@@ -962,7 +1130,9 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                     {/* Stats summary display */}
                     <div className="text-center space-y-6 md:border-l md:border-slate-800 md:pl-8">
                       <div>
-                        <p className="text-slate-400 text-sm font-semibold">Totaal Antwoorden</p>
+                        <p className="text-slate-400 text-sm font-semibold">
+                          {currentQuestion.questionType === "wheel_spin" ? "Totaal Spelers Gedraaid" : "Totaal Antwoorden"}
+                        </p>
                         <h1 className="text-6xl font-black tracking-tight text-white">{answeredCount}</h1>
                         <p className="text-slate-400 text-xs">van de {totalActives} actieve spelers</p>
                       </div>
@@ -1442,7 +1612,9 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                               {/* Question options mapping indicating correct ans */}
                               <div className="p-4 bg-slate-900/60 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                                 {q.options.map((opt, oIdx) => {
-                                  const isCorrectAns = oIdx === q.correctOptionIndex;
+                                  const isCorrectAns = q.correctOptionIndices && q.correctOptionIndices.length > 0
+                                    ? q.correctOptionIndices.includes(oIdx)
+                                    : oIdx === q.correctOptionIndex;
                                   return (
                                     <div key={oIdx} className={`p-2.5 rounded-lg border flex items-center justify-between ${
                                       isCorrectAns 

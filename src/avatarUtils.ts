@@ -214,9 +214,23 @@ export function ShapeIcon({ idx, className = "w-6 h-6 shrink-0 fill-current" }: 
       React.createElement("circle", { cx: "12", cy: "12", r: "10" })
     );
   }
+  if (idx === 3) {
+    return React.createElement(
+      "svg",
+      { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+      React.createElement("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" })
+    );
+  }
+  if (idx === 4) {
+    return React.createElement(
+      "svg",
+      { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
+      React.createElement("polygon", { points: "12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" })
+    );
+  }
   return React.createElement(
     "svg",
     { className, viewBox: "0 0 24 24", xmlns: "http://www.w3.org/2000/svg" },
-    React.createElement("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" })
+    React.createElement("polygon", { points: "12,2 21,7 21,17 12,22 3,17 3,7" })
   );
 }

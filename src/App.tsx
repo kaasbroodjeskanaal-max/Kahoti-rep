@@ -96,16 +96,22 @@ export default function App() {
 
       <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 flex-1 flex flex-col justify-center items-center text-center">
         {/* Subtle glowing element */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full" />
-          <span className="relative text-6xl md:text-7xl" role="img" aria-label="quiz logo">
-            🎉
-          </span>
+        <div className="relative mb-6 flex justify-center">
+          <div className="absolute inset-0 bg-indigo-500/25 blur-3xl rounded-full scale-110" />
+          <img 
+            src="https://cdn.imageurlgenerator.com/uploads/9df1cd72-ee23-4abc-8f99-c7bf3a38bebc.jpeg"
+            alt="Kahoti Logo"
+            className="relative w-32 h-32 md:w-40 md:h-40 object-cover rounded-3xl border-4 border-white dark:border-slate-800 shadow-xl"
+            referrerPolicy="no-referrer"
+          />
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-extrabold font-display tracking-tight text-slate-800 dark:text-white leading-tight mb-6 max-w-3xl">
-          Realtime Quiz Builder & Playroom
+        <h1 className="text-6xl md:text-8xl font-extrabold font-display tracking-tight text-indigo-600 dark:text-indigo-400 leading-tight mb-3">
+          Kahoti
         </h1>
+        <h2 className="text-2xl md:text-4xl font-bold font-display text-slate-800 dark:text-white mb-6">
+          Realtime Quiz Builder & Playroom
+        </h2>
         <p className="text-slate-500 dark:text-slate-400 text-lg md:text-xl max-w-xl mb-12">
           De ultieme Kahoot-stijl quizervaring! Maak eenvoudig eigen quizzen met afbeeldingen, deel de code en ontdek wie de slimste is op het realtime leaderboard.
         </p>
@@ -180,7 +186,7 @@ export default function App() {
       </div>
 
       <footer className="py-8 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-400 dark:text-slate-500 font-medium">
-        © {new Date().getFullYear()} Realtime Quiz. Gebouwd met Supabase & PostgreSQL.
+        © {new Date().getFullYear()} Kahoti. Gebouwd met Supabase & PostgreSQL.
       </footer>
     </div>
   );

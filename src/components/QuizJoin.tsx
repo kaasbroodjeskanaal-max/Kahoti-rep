@@ -298,9 +298,19 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
 
   return (
     <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-[75vh]">
-      {/* Decorative Brand */}
+      {/* Decorative Brand with Logo */}
+      <div className="relative mb-4 flex justify-center">
+        <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full scale-110" />
+        <img 
+          src="https://cdn.imageurlgenerator.com/uploads/9df1cd72-ee23-4abc-8f99-c7bf3a38bebc.jpeg"
+          alt="Kahoti Logo"
+          className="relative w-24 h-24 object-cover rounded-2xl border-4 border-white dark:border-slate-800 shadow-lg"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+
       <h1 className="text-4xl md:text-5xl font-extrabold font-display tracking-tight text-center mb-8 bg-linear-to-r from-indigo-600 via-pink-650 to-amber-500 bg-clip-text text-transparent drop-shadow-xs">
-        Realtime Quiz!
+        Kahoti!
       </h1>
 
       <div className="w-full bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-md border border-slate-50 dark:border-slate-800 relative overflow-hidden">
@@ -324,7 +334,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="000 000"
-                className="w-full text-center tracking-[0.5em] font-mono text-3xl font-extrabold px-4 py-4 border-2 border-indigo-100 dark:border-indigo-950 rounded-2xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 dark:text-white"
+                className="w-full text-center tracking-[0.5em] font-mono text-3xl font-extrabold px-4 py-4 border-2 border-indigo-100 dark:border-indigo-950 rounded-2xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 text-slate-900 dark:text-white"
                 disabled={isLoading}
               />
             </div>
@@ -722,7 +732,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
                 placeholder="Bijv. QuizKoning"
-                className="w-full text-center text-lg font-bold px-4 py-3 border-2 border-indigo-100 dark:border-indigo-950 rounded-xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 dark:text-white"
+                className="w-full text-center text-lg font-bold px-4 py-3 border-2 border-indigo-100 dark:border-indigo-950 rounded-xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 text-slate-900 dark:text-white"
                 disabled={isLoading}
               />
             </div>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
-import { GameSession, Player, Question } from "../types";
+import { GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
 import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
 import confetti from "canvas-confetti";
+import { LuckyWheel } from "./LuckyWheel";
 
 interface GamePlayerProps {
   sessionId: string;
@@ -18,6 +19,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   const [self, setSelf] = useState<Player | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [hasAnswered, setHasAnswered] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [playerUid, setPlayerUid] = useState<string>("");
   const [playerCountdown, setPlayerCountdown] = useState<number | string>(3);
@@ -222,6 +224,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   useEffect(() => {
     if (session?.status === "countdown") {
       setHasAnswered(false);
+      setSelectedIndices([]);
       setPlayerCountdown(3);
       const countdownInterval = setInterval(() => {
         setPlayerCountdown((prev) => {
@@ -236,8 +239,8 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     }
   }, [session?.status, session?.currentQuestionIndex]);
 
-  // Answer submission Handler
-  const handleSelectOption = async (optionIdx: number) => {
+  // Helper to submit raw answer index or bitmask to DB
+  const submitAnswerToSupabase = async (answerValue: number) => {
     if (hasAnswered || !session || !playerUid) return;
 
     try {
@@ -249,7 +252,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
       const { error } = await supabase
         .from("players")
         .update({
-          current_answer_index: optionIdx,
+          current_answer_index: answerValue,
           current_answer_time: reactionDelay,
         })
         .eq("id", playerUid)
@@ -259,6 +262,27 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     } catch (err) {
       console.error("Fout bij indienen antwoord:", err);
     }
+  };
+
+  // Answer submission Handler for single correct questions
+  const handleSelectOption = async (optionIdx: number) => {
+    await submitAnswerToSupabase(optionIdx);
+  };
+
+  // Toggle handlers for multi correct questions
+  const handleToggleOptionSelection = (optionIdx: number) => {
+    setSelectedIndices((prev) =>
+      prev.includes(optionIdx) ? prev.filter((i) => i !== optionIdx) : [...prev, optionIdx]
+    );
+  };
+
+  const handleSubmitMultipleAnswers = async () => {
+    if (selectedIndices.length === 0) return;
+    let bitmask = 0;
+    selectedIndices.forEach((idx) => {
+      bitmask |= (1 << idx);
+    });
+    await submitAnswerToSupabase(bitmask);
   };
 
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -282,10 +306,41 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
 
   const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
   const activeQuestion = questions[currentQuestionIdx];
+  const firstQ = questions[0];
+  const playerTheme = activeQuestion?.theme || firstQ?.theme || "default";
+  const lobbyTheme = activeQuestion?.lobbyTheme || firstQ?.lobbyTheme || "default";
+  const activeTheme = session?.status === "lobby"
+    ? getThemeConfig(lobbyTheme)
+    : getThemeConfig(playerTheme);
 
   const getPointsEarnedForThisQuestion = () => {
     if (!activeQuestion || !self) return 0;
-    const isCorrect = self.currentAnswerIndex === activeQuestion.correctOptionIndex;
+
+    if (activeQuestion.questionType === "wheel_spin") {
+      const selectedIndex = self.currentAnswerIndex;
+      if (selectedIndex === null || selectedIndex === undefined || selectedIndex < 0 || selectedIndex >= activeQuestion.options.length) {
+        return 0;
+      }
+      const optionText = activeQuestion.options[selectedIndex];
+      const textToAnalyze = optionText.toLowerCase();
+
+      if (textToAnalyze.includes("bankroet") || textToAnalyze.includes("verlies alles") || textToAnalyze.includes("bankrupt") || textToAnalyze.includes("alles kwijt")) {
+        return -self.score;
+      } else if (textToAnalyze.includes("verdubbel") || textToAnalyze.includes("double") || textToAnalyze.includes("x2") || textToAnalyze.includes("vermenigvuldig")) {
+        return self.score;
+      } else {
+        const numberMatches = optionText.match(/[-+]?\s*\d+/g);
+        if (numberMatches && numberMatches.length > 0) {
+          const parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
+          if (!isNaN(parsedValue)) {
+            return parsedValue;
+          }
+        }
+        return 300;
+      }
+    }
+
+    const isCorrect = checkIsCorrect(self.currentAnswerIndex, activeQuestion);
     if (!isCorrect) return 0;
 
     const maxPoints = activeQuestion.points || 1000;
@@ -304,12 +359,60 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     "bg-blue-500 hover:bg-blue-600 active:bg-blue-750",
     "bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700",
     "bg-green-500 hover:bg-green-600 active:bg-green-750",
+    "bg-purple-500 hover:bg-purple-600 active:bg-purple-750",
+    "bg-orange-500 hover:bg-orange-600 active:bg-orange-750",
   ];
 
-  const shapes = ["▲", "♦", "●", "■"];
+  const shapes = ["▲", "♦", "●", "■", "★", "♣"];
 
   return (
-    <div className="min-h-[85vh] bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-colors duration-250">
+    <div className={`min-h-[85vh] ${activeTheme.bgClasses} text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-all duration-700 relative`}>
+      {/* Decorative background overlays for themes */}
+      {activeTheme.name !== "Standaard" && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          {activeTheme.name === "Winter" && (
+            <>
+              <div className="absolute top-[10%] left-[15%] text-2xl animate-bounce">❄️</div>
+              <div className="absolute top-[35%] left-[85%] text-xl animate-bounce">❄️</div>
+              <div className="absolute top-[75%] left-[8%] text-3xl animate-bounce">❄️</div>
+              <div className="absolute top-[18%] left-[55%] text-lg animate-bounce">❄️</div>
+              <div className="absolute top-[65%] left-[70%] text-2xl animate-bounce">❄️</div>
+            </>
+          )}
+          {activeTheme.name === "Zomer" && (
+            <>
+              <div className="absolute top-[8%] left-[22%] text-3xl animate-spin duration-10000">☀️</div>
+              <div className="absolute top-[20%] left-[80%] text-3xl animate-pulse">🌴</div>
+              <div className="absolute bottom-[12%] left-[6%] text-2xl">🍹</div>
+              <div className="absolute bottom-[18%] right-[12%] text-3xl animate-bounce">🍦</div>
+            </>
+          )}
+          {activeTheme.name === "Halloween" && (
+            <>
+              <div className="absolute top-[12%] left-[12%] text-3xl animate-bounce">👻</div>
+              <div className="absolute top-[45%] left-[82%] text-3xl animate-pulse">🎃</div>
+              <div className="absolute bottom-[18%] left-[40%] text-3xl animate-bounce">🦇</div>
+              <div className="absolute top-[28%] left-[68%] text-2xl">🕸️</div>
+            </>
+          )}
+          {activeTheme.name === "Kosmisch" && (
+            <>
+              <div className="absolute top-[12%] left-[22%] text-lg animate-pulse">⭐</div>
+              <div className="absolute top-[48%] left-[85%] text-xl animate-pulse">✨</div>
+              <div className="absolute bottom-[18%] left-[12%] text-3xl animate-pulse">🪐</div>
+              <div className="absolute top-[68%] left-[58%] text-xl animate-pulse">🌟</div>
+            </>
+          )}
+          {activeTheme.name === "Neon Retro" && (
+            <>
+              <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_95%,rgba(244,63,94,0.15)_95%)] bg-[size:100%_40px] animate-pulse" />
+              <div className="absolute top-[12%] left-[12%] text-2xl animate-pulse">⚡</div>
+              <div className="absolute top-[58%] left-[85%] text-2xl animate-pulse">🕹️</div>
+            </>
+          )}
+        </div>
+      )}
+
       {isLoading || !playerUid ? (
         <div className="flex-1 flex flex-col items-center justify-center py-20">
           <Loader2 className="w-10 h-10 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
@@ -362,7 +465,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-6 px-4"
+              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-6 px-4 relative z-10"
             >
               <div className="space-y-1">
                 <span className="inline-block px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider">
@@ -373,7 +476,7 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-indigo-600 to-violet-750 text-white rounded-3xl p-8 border-b-6 border-indigo-800 shadow-lg max-w-sm w-full text-center space-y-3">
+              <div className={`${activeTheme.cardBg} rounded-3xl p-8 shadow-lg max-w-sm w-full text-center space-y-3 border border-white/5 relative z-10`}>
                 <p className="text-[10px] text-indigo-200 font-extrabold tracking-widest uppercase">
                   {currentQuestionIdx === 0 ? "QUIZ" : "VRAAG"}
                 </p>
@@ -412,10 +515,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col justify-between space-y-4"
+              className="flex-1 flex flex-col justify-between space-y-4 relative z-10"
             >
               {/* High-visibility Dynamic Question Display Header */}
-              <div className="bg-slate-900 text-white rounded-3xl p-5 md:p-6 flex flex-col gap-3 border-b-4 border-slate-950 shadow-md">
+              <div className={`${activeTheme.cardBg} rounded-3xl p-5 md:p-6 flex flex-col gap-3 shadow-md border border-white/5 relative z-10`}>
                 <div className="flex justify-between items-center bg-white/5 px-2.5 py-1 rounded-full border border-white/10 self-start w-full">
                   <span className="text-[10px] text-indigo-300 font-black tracking-widest uppercase">
                     VRAAG {currentQuestionIdx + 1} / {session.totalQuestions}
@@ -444,27 +547,93 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               {/* Action Buttons Interface */}
               {!hasAnswered ? (
                 !isAnsweringOpen ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 bg-slate-900 border border-slate-950 text-white rounded-3xl p-8 shadow-md">
+                  <div className={`flex-1 flex flex-col items-center justify-center text-center space-y-4 ${activeTheme.cardBg} rounded-3xl p-8 shadow-md relative z-10`}>
                     <div className="w-12 h-12 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin mb-2" />
-                    <h3 className="text-xl font-extrabold font-display text-indigo-300">Lees de vraag goed! 👀</h3>
+                    <h3 className="text-xl font-extrabold font-display text-indigo-300">Maak je klaar! 🎰</h3>
                     <p className="text-slate-400 text-xs">
-                      De antwoorden verschijnen zo meteen op je scherm...
+                      Je mag zo meteen aan het Rad van Fortuin draaien...
                     </p>
                   </div>
+                ) : activeQuestion.questionType === "wheel_spin" ? (
+                  <div className={`flex-1 flex flex-col justify-center items-center py-4 px-2 space-y-4 ${activeTheme.cardBg} rounded-3xl p-6 relative z-10 shadow-lg border border-white/5`}>
+                    <div className="text-center">
+                      <span className="text-xs font-black tracking-widest text-amber-500 uppercase flex items-center justify-center gap-1">
+                        🎰 Geluksronde - Waag een gokje
+                      </span>
+                      <p className="text-slate-400 text-xs mt-1 max-w-xs leading-relaxed">
+                        Klik op de spin knop om te zien hoeveel bonuspunten jij verdient of verliest!
+                      </p>
+                    </div>
+
+                    <LuckyWheel
+                      options={activeQuestion.options}
+                      onSpinComplete={async (winIdx, winOptionText) => {
+                        if (winOptionText.includes("+") || winOptionText.toLowerCase().includes("verdubbel") || winOptionText.toLowerCase().includes("double") || winOptionText.toLowerCase().includes("x2")) {
+                          confetti({
+                            particleCount: 80,
+                            spread: 60,
+                            origin: { y: 0.75 },
+                            colors: ["#F59E0B", "#10B981", "#3B82F6", "#EC4899"]
+                          });
+                        }
+                        await submitAnswerToSupabase(winIdx);
+                      }}
+                    />
+                  </div>
                 ) : (
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
-                    {activeQuestion.options.map((option, idx) => (
+                  <div className="flex-1 flex flex-col gap-3 pb-4">
+                    {/* Instructions banner */}
+                    {activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1 && (
+                      <div className="bg-indigo-50 dark:bg-indigo-950/20 text-indigo-750 dark:text-indigo-350 p-3 rounded-xl border border-indigo-100 dark:border-indigo-950/40 text-xs font-bold flex items-center gap-2">
+                        <span className="animate-pulse">💡</span>
+                        <span>MULTI-SELECT: Vink alle juiste opties aan en druk op de grote knop onderaan!</span>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {activeQuestion.options.map((option, idx) => {
+                        const isMultiCorrect = activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1;
+                        const isSelected = selectedIndices.includes(idx);
+                        
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              if (isMultiCorrect) {
+                                handleToggleOptionSelection(idx);
+                              } else {
+                                handleSelectOption(idx);
+                              }
+                            }}
+                            className={`w-full rounded-2xl text-white font-display text-xl font-black flex items-center justify-between px-6 py-4 gap-4 border-b-6 shadow-xs hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer ${
+                              optionColors[idx % optionColors.length]
+                            } ${isSelected ? "ring-4 ring-white border-white scale-[1.02]" : ""}`}
+                          >
+                            <div className="flex items-center gap-4 min-w-0">
+                              <ShapeIcon idx={idx} className="w-8 h-8 shrink-0 fill-white" />
+                              <span className="text-base font-bold text-left block max-w-full leading-normal truncate pr-2">
+                                {option}
+                              </span>
+                            </div>
+                            {isSelected && (
+                              <div className="bg-white/35 text-white w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ring-2 ring-white">
+                                ✓
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1 && (
                       <button
-                        key={idx}
-                        onClick={() => handleSelectOption(idx)}
-                        className={`w-full rounded-2xl text-white font-display text-xl font-black flex items-center justify-start px-6 py-4 gap-4 border-b-6 shadow-xs hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer ${optionColors[idx]}`}
+                        onClick={() => handleSubmitMultipleAnswers()}
+                        disabled={selectedIndices.length === 0}
+                        className="w-full mt-2 bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-650 text-white font-display font-black py-4 rounded-2xl border-b-6 border-indigo-800 focus:scale-[0.99] hover:scale-[1.01] shadow-lg transition-all uppercase tracking-widest text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                       >
-                        <ShapeIcon idx={idx} className="w-8 h-8 shrink-0 fill-white" />
-                        <span className="text-base font-bold text-left block max-w-full leading-normal truncate pr-2">
-                          {option}
-                        </span>
+                        Antwoord Insturen ({selectedIndices.length})
                       </button>
-                    ))}
+                    )}
                   </div>
                 )
               ) : (
@@ -492,7 +661,31 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col justify-center max-w-md mx-auto py-6"
             >
-              {self.currentAnswerIndex === activeQuestion.correctOptionIndex ? (
+               {activeQuestion.questionType === "wheel_spin" ? (
+                /* LUCKY WHEEL RESULT DESIGN */
+                <div className="bg-amber-500 border-b-8 border-amber-600 rounded-3xl p-8 text-white text-center space-y-6 shadow-md">
+                  <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl font-extrabold mx-auto animate-bounce">
+                    <Sparkles className="w-10 h-10 text-yellow-300" />
+                  </div>
+                  <div className="space-y-1">
+                    <h2 className="text-2xl sm:text-3xl font-black font-display uppercase tracking-wider">Gok Resultaat! 🎰</h2>
+                    <p className="text-amber-100 font-semibold text-sm">
+                      Jij landde op: <span className="underline font-black">{self.currentAnswerIndex !== null && self.currentAnswerIndex !== undefined && self.currentAnswerIndex >= 0 ? activeQuestion.options[self.currentAnswerIndex] : "Geen gok gedaan"}</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-amber-600/45 p-4 rounded-2xl border border-white/10 inline-block">
+                    <p className="text-xs text-amber-250 uppercase font-black tracking-widest text-[9px] mb-0.5">Verandering Score</p>
+                    <h3 className="text-2xl font-mono font-bold text-white flex items-center gap-1 justify-center">
+                      {getPointsEarnedForThisQuestion() >= 0 ? "+" : ""}{getPointsEarnedForThisQuestion()} pt
+                    </h3>
+                  </div>
+                  
+                  <p className="text-xs text-amber-100/80 italic leading-relaxed">
+                    Spannende gokronde! Je score is bijgewerkt op basis van jouw geluksspin.
+                  </p>
+                </div>
+              ) : checkIsCorrect(self.currentAnswerIndex, activeQuestion) ? (
                 /* CORRECT ANSWER DESIGN */
                 <div className="bg-emerald-500 border-b-8 border-emerald-600 rounded-3xl p-8 text-white text-center space-y-6 shadow-md">
                   <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl font-extrabold mx-auto animate-bounce">
@@ -529,7 +722,11 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                       {self.currentAnswerIndex === null ? "Te laat!" : "Helaas, onjuist!"}
                     </h2>
                     <p className="text-red-100 text-sm">
-                      Het juiste antwoord was: <span className="font-bold underline">{activeQuestion.options[activeQuestion.correctOptionIndex]}</span>
+                      Het juiste antwoord was: <span className="font-bold underline">
+                        {(activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1)
+                          ? activeQuestion.correctOptionIndices.map((idx) => activeQuestion.options[idx]).join(", ")
+                          : activeQuestion.options[activeQuestion.correctOptionIndex ?? 0]}
+                      </span>
                     </p>
                   </div>
 
