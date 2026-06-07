@@ -5,8 +5,10 @@ import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkl
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
+import { translations } from "../translations";
 
 interface GameHostProps {
+  lang?: "nl" | "en";
   quiz: Quiz;
   onExit: () => void;
 }
@@ -33,7 +35,8 @@ interface QuestionHistoryRecord {
   percentageCorrect: number;
 }
 
-export default function GameHost({ quiz, onExit }: GameHostProps) {
+export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
+  const t = translations[lang];
   const [session, setSession] = useState<GameSession | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [code, setCode] = useState("");

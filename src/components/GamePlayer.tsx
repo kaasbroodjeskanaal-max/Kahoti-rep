@@ -6,14 +6,18 @@ import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
 import confetti from "canvas-confetti";
 import { LuckyWheel } from "./LuckyWheel";
+import { translations } from "../translations";
 
 interface GamePlayerProps {
+  lang?: "nl" | "en";
   sessionId: string;
   nickname: string;
   onExit: () => void;
 }
 
-export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerProps) {
+export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }: GamePlayerProps) {
+  const t = translations[lang];
+
   const { displayName, avatarUrl } = parseNicknameAndAvatar(nickname || "");
   const [session, setSession] = useState<GameSession | null>(null);
   const [self, setSelf] = useState<Player | null>(null);

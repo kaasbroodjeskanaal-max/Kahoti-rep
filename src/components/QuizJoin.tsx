@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Play, RefreshCw, Sparkles, Sliders, Palette } from 
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl, parseQuizTitle } from "../avatarUtils";
+import { translations } from "../translations";
 
 // Fun Dutch character personality tags to make customization incredibly delightful!
 export const BASE_DESCRIPTIONS: Record<string, string> = {
@@ -35,11 +36,13 @@ export const BASE_DESCRIPTIONS: Record<string, string> = {
 };
 
 interface QuizJoinProps {
+  lang?: "nl" | "en";
   onJoined: (sessionId: string, nickname: string) => void;
   onBack: () => void;
 }
 
-export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
+export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProps) {
+  const t = translations[lang];
   const [code, setCode] = useState("");
   const [nickname, setNickname] = useState("");
   const [step, setStep] = useState<"code" | "nickname">("code");
@@ -380,8 +383,10 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
           /* STEP 1: ENTER CODE */
           <form onSubmit={handleValidateCode} className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-2">Meedoen aan een quiz?</h2>
-              <p className="text-gray-500 dark:text-slate-400 text-sm">Typ de 6-cijferige spelcode in om de lobby te betreden.</p>
+              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-2">{t.enterCode}</h2>
+              <p className="text-gray-500 dark:text-slate-400 text-sm">
+                {lang === "nl" ? "Typ de 6-cijferige spelcode in om de lobby te betreden." : "Type the 6-digit game code to enter the lobby."}
+              </p>
             </div>
 
             <div>
@@ -410,7 +415,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 onClick={onBack}
                 className="w-1/3 flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-400 py-4 rounded-xl font-semibold transition cursor-pointer"
               >
-                <ArrowLeft className="w-4 h-4" /> Terug
+                <ArrowLeft className="w-4 h-4" /> {t.back}
               </button>
               <button
                 type="submit"
@@ -420,7 +425,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  "Volgende"
+                  lang === "nl" ? "Volgende" : "Next"
                 )}
               </button>
             </div>
@@ -430,10 +435,14 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
           <form onSubmit={handleJoinLobby} className="space-y-6">
             <div className="text-center">
               <span className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-mono font-bold text-sm rounded-full mb-3">
-                Lobby gevonden!
+                {lang === "nl" ? "Lobby gevonden!" : "Lobby found!"}
               </span>
-              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-1">Poppetje & Nickname</h2>
-              <p className="text-gray-500 dark:text-slate-400 text-xs">Ontwerp je poppetje en voer je spelersnaam in!</p>
+              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-1">
+                {lang === "nl" ? "Avatar & Nickname" : "Avatar & Nickname"}
+              </h2>
+              <p className="text-gray-500 dark:text-slate-400 text-xs">
+                {lang === "nl" ? "Ontwerp je avatar en voer je spelersnaam in!" : "Design your avatar and enter your player name!"}
+              </p>
             </div>
 
             {/* Avatar Builder */}
@@ -790,7 +799,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 maxLength={15}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
-                placeholder="Bijv. QuizKoning"
+                placeholder={lang === "nl" ? "Bijv. QuizKoning" : "e.g. QuizKing"}
                 className="w-full text-center text-lg font-bold px-4 py-3 border-2 border-indigo-100 dark:border-indigo-950 rounded-xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 text-slate-900 dark:text-white"
                 disabled={isLoading}
               />
@@ -809,7 +818,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                 className="w-1/3 flex items-center justify-center border border-gray-200 dark:border-slate-805 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300 py-4 rounded-xl font-semibold transition cursor-pointer"
                 disabled={isLoading}
               >
-                Terug
+                {t.back}
               </button>
               <button
                 type="submit"
@@ -820,7 +829,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-current" /> Spelen!
+                    <Play className="w-4 h-4 fill-current" /> {lang === "nl" ? "Spelen!" : "Play!"}
                   </>
                 )}
               </button>

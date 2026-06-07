@@ -6,6 +6,7 @@ import GameHost from "./components/GameHost";
 import GamePlayer from "./components/GamePlayer";
 import { Quiz } from "./types";
 import { Play, Award, Loader2, Users, Database, Sun, Moon, ShieldAlert } from "lucide-react";
+import { translations } from "./translations";
 
 export default function App() {
   // Threat Intel & Anti-DDoS Circuit Breaker State
@@ -39,6 +40,14 @@ export default function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, [blockedCountdown]);
+
+  // Language state (nl or en)
+  const [lang, setLang] = useState<"nl" | "en">(() => {
+    return (localStorage.getItem("kahoti_lang") as "nl" | "en") || "nl";
+  });
+
+  const t = translations[lang];
+
   const [mode, setMode] = useState<null | "join" | "manage" | "playing" | "hosting">(null);
 
   // Active Session Details
@@ -74,13 +83,13 @@ export default function App() {
 
         <div className="max-w-md space-y-4">
           <span className="bg-red-500/15 border border-red-500/25 text-red-400 font-mono text-[10px] uppercase tracking-[0.25em] font-black px-4 py-2 rounded-full inline-block">
-            🚨 DDoS & Spam Shield Actief
+            {t.shieldActive}
           </span>
           <h1 className="text-3xl font-black font-display text-white tracking-tight">
-            Verzoek Snelheidslimiet Overschreden
+            {t.rateLimitExceeded}
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed font-sans">
-            {threatState.blockedReason || "Het systeem heeft een ongebruikelijk hoge activiteit gedetecteerd vanaf deze browser. De client is tijdelijk geblokkeerd om serveroverbelasting en onnodig egress-verbruik te voorkomen."}
+            {threatState.blockedReason ? (lang === "nl" ? threatState.blockedReason : "Anti-DDoS alert: Access is temporarily locked to protect server telemetry.") : t.blockedReason}
           </p>
 
           {/* Massively visual physical countdown card */}
@@ -89,12 +98,12 @@ export default function App() {
               {blockedCountdown}s
             </span>
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-              Tijdelijke Afkoelperiode Actief
+              {t.cooldownPeriod}
             </span>
           </div>
 
           <p className="text-slate-600 text-[10px] leading-normal uppercase tracking-widest pt-4 font-mono font-bold">
-            Kahoti Systeembeveiliging & DDoS Beheersing
+            {t.securityTitle}
           </p>
         </div>
       </div>
@@ -105,6 +114,7 @@ export default function App() {
   if (mode === "join") {
     return (
       <QuizJoin
+        lang={lang}
         onJoined={(sessionId, nick) => {
           setActiveSessionId(sessionId);
           setPlayerNickname(nick);
@@ -118,6 +128,7 @@ export default function App() {
   if (mode === "playing") {
     return (
       <GamePlayer
+        lang={lang}
         sessionId={activeSessionId}
         nickname={playerNickname}
         onExit={() => {
@@ -132,18 +143,19 @@ export default function App() {
   if (mode === "manage") {
     return (
       <QuizManager
+        lang={lang}
         onHostGame={(quiz) => {
           const lastExit = localStorage.getItem("last_session_exit_timestamp");
           const lastStart = localStorage.getItem("last_session_start_timestamp");
           const now = Date.now();
           if (lastExit && now - Number(lastExit) < 10000) {
             const secondsLeft = Math.ceil((10000 - (now - Number(lastExit))) / 1000);
-            alert(`Niet zo snel! Je hebt net een live sessie gestorven/gestopt. Wacht nog ${secondsLeft} seconden om een nieuwe op te starten.`);
+            alert(t.waitExit.replace("{seconds}", String(secondsLeft)));
             return;
           }
           if (lastStart && now - Number(lastStart) < 15000) {
             const secondsLeft = Math.ceil((15000 - (now - Number(lastStart))) / 1000);
-            alert(`Snelheidslimiet! Wacht nog ${secondsLeft} seconden tussen het herhaaldelijk openen/hosten van live quizzen.`);
+            alert(t.waitStart.replace("{seconds}", String(secondsLeft)));
             return;
           }
           localStorage.setItem("last_session_start_timestamp", String(now));
@@ -158,6 +170,7 @@ export default function App() {
   if (mode === "hosting" && activeQuiz) {
     return (
       <GameHost
+        lang={lang}
         quiz={activeQuiz}
         onExit={() => {
           localStorage.setItem("last_session_exit_timestamp", String(Date.now()));
@@ -170,14 +183,28 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-indigo-100 font-sans transition-colors duration-250 relative">
-      {/* Floating Dark Mode Toggle */}
-      <div className="absolute top-6 right-6 z-50">
+      {/* Floating Header Toggles */}
+      <div className="absolute top-6 right-6 z-50 flex items-center gap-2">
+        {/* Language Selection Button */}
+        <button
+          onClick={() => {
+            const next = lang === "nl" ? "en" : "nl";
+            setLang(next);
+            localStorage.setItem("kahoti_lang", next);
+          }}
+          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5"
+          title={lang === "nl" ? "Switch to English" : "Schakel naar Nederlands"}
+        >
+          <span>{lang === "nl" ? "🇳🇱 NL" : "🇬🇧 EN"}</span>
+        </button>
+
+        {/* Dark Mode Toggle */}
         <button
           onClick={() => setIsDark(!isDark)}
-          className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
-          title={isDark ? "Lichte modus" : "Donkere modus"}
+          className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
+          title={isDark ? t.lightMode : t.darkMode}
         >
-          {isDark ? <Sun className="w-5 h-5 text-amber-500 animate-[spin_5s_linear_infinite]" /> : <Moon className="w-5 h-5 text-indigo-500" />}
+          {isDark ? <Sun className="w-4 h-4 text-amber-500 animate-[spin_5s_linear_infinite]" /> : <Moon className="w-4 h-4 text-indigo-500" />}
         </button>
       </div>
 
@@ -194,13 +221,13 @@ export default function App() {
         </div>
 
         <h1 className="text-6xl md:text-8xl font-extrabold font-display tracking-tight text-indigo-600 dark:text-indigo-400 leading-tight mb-3">
-          Kahoti
+          {t.title}
         </h1>
         <h2 className="text-2xl md:text-4xl font-bold font-display text-slate-800 dark:text-white mb-6">
-          Realtime Quiz Builder & Playroom
+          {t.subtitle}
         </h2>
         <p className="text-slate-500 dark:text-slate-400 text-lg md:text-xl max-w-xl mb-12">
-          De ultieme Kahoot-stijl quizervaring! Maak eenvoudig eigen quizzen met afbeeldingen, deel de code en ontdek wie de slimste is op het realtime leaderboard.
+          {t.tagline}
         </p>
 
         {/* Home Navigation Options */}
@@ -214,11 +241,11 @@ export default function App() {
               <div className="inline-flex p-3 bg-white/20 rounded-2xl mb-4 group-hover:bg-white/30 transition">
                 <Play className="w-8 h-8 fill-current" />
               </div>
-              <h2 className="text-3xl font-black mb-2">Meedoen aan Spel</h2>
-              <p className="text-indigo-100 text-sm font-sans">Aanmelden met Spelcode en live meespelen met de rest.</p>
+              <h2 className="text-3xl font-black mb-2">{t.joinGame}</h2>
+              <p className="text-indigo-100 text-sm font-sans">{t.joinGameDesc}</p>
             </div>
             <span className="text-indigo-50 text-sm font-bold mt-4 flex items-center gap-1 group-hover:translate-x-2 transition-transform">
-              Ga spelen →
+              {t.playBtn}
             </span>
           </button>
 
@@ -231,11 +258,11 @@ export default function App() {
               <div className="inline-flex p-3 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl mb-4 group-hover:scale-110 transition-transform">
                 <Database className="w-8 h-8" />
               </div>
-              <h2 className="text-3xl font-black mb-2">Quizzen beheren</h2>
-              <p className="text-gray-500 dark:text-slate-400 text-sm font-sans">Quizzen ontwerpen met afbeeldingen en direct hosten.</p>
+              <h2 className="text-3xl font-black mb-2">{t.manageQuizzes}</h2>
+              <p className="text-gray-500 dark:text-slate-400 text-sm font-sans">{t.manageQuizzesDesc}</p>
             </div>
             <span className="text-indigo-600 dark:text-indigo-400 text-sm font-bold mt-4 flex items-center gap-1 group-hover:translate-x-2 transition-transform">
-              Zelf hosten →
+              {t.hostBtn}
             </span>
           </button>
         </div>
@@ -247,8 +274,8 @@ export default function App() {
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">Realtime Sync</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">Spelers antwoorden synchroon en direct.</p>
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">{t.realtimeSync}</h4>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">{t.realtimeSyncDesc}</p>
             </div>
           </div>
           <div className="flex gap-4">
@@ -256,8 +283,8 @@ export default function App() {
               <Award className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">Leaderboard</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">Punten en streaks na elke gestelde vraag.</p>
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">{t.leaderboard}</h4>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">{t.leaderboardDesc}</p>
             </div>
           </div>
           <div className="flex gap-4 col-span-2 md:col-span-1">
@@ -265,15 +292,15 @@ export default function App() {
               <Database className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">Supabase SQL</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">Uiterst stabiele opslag met PostgreSQL.</p>
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base font-display">{t.database}</h4>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-sans mt-1">{t.databaseDesc}</p>
             </div>
           </div>
         </div>
       </div>
 
       <footer className="py-8 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-400 dark:text-slate-500 font-medium">
-        © {new Date().getFullYear()} Kahoti. Gebouwd met Supabase & PostgreSQL.
+        © {new Date().getFullYear()} {t.footer}
       </footer>
     </div>
   );

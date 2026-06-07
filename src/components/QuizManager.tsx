@@ -3,13 +3,16 @@ import { supabase } from "../supabase";
 import { Quiz, Question } from "../types";
 import { parseQuizTitle } from "../avatarUtils";
 import { Plus, Trash2, Play, ArrowLeft, HelpCircle, Loader2 } from "lucide-react";
+import { translations } from "../translations";
 
 interface QuizManagerProps {
+  lang?: "nl" | "en";
   onHostGame: (quiz: Quiz) => void;
   onBack: () => void;
 }
 
-export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
+export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizManagerProps) {
+  const t = translations[lang];
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
     try {
       const cached = localStorage.getItem("cached_quizzes");
@@ -466,10 +469,10 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
           onClick={onBack}
           className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-medium transition cursor-pointer"
         >
-          <ArrowLeft className="w-5 h-5" /> Terug naar start
+          <ArrowLeft className="w-5 h-5" /> {lang === "nl" ? "Terug naar start" : "Back to start"}
         </button>
         <h1 className="text-3xl font-bold font-display tracking-tight text-slate-800 dark:text-white">
-          Quiz Beheerder
+          {lang === "nl" ? "Quiz Beheerder" : "Quiz Creator"}
         </h1>
       </div>
 
@@ -477,16 +480,22 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
         <div className="max-w-md mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-md space-y-6 mt-12">
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-extrabold font-display text-slate-800 dark:text-white">
-              {authMode === "login" ? "Inloggen" : "Account aanmaken"}
+              {authMode === "login" 
+                ? (lang === "nl" ? "Inloggen" : "Log In") 
+                : (lang === "nl" ? "Account aanmaken" : "Sign Up")}
             </h2>
             <p className="text-sm text-gray-500 dark:text-slate-400">
-              Je moet ingelogd zijn om quizzen aan te maken, te beheren of te hosten.
+              {lang === "nl" 
+                ? "Je moet ingelogd zijn om quizzen aan te maken, te beheren of te hosten." 
+                : "Register or log in to keep your custom quizzes stored securely."}
             </p>
           </div>
 
           <form onSubmit={handleAuthSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">E-mailadres</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                {lang === "nl" ? "E-mailadres" : "Email Address"}
+              </label>
               <input
                 type="email"
                 required
@@ -497,13 +506,15 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Wachtwoord</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                {lang === "nl" ? "Wachtwoord" : "Password"}
+              </label>
               <input
                 type="password"
                 required
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder={authMode === "login" ? "Wachtwoord" : "Minimaal 6 karakters"}
+                placeholder={authMode === "login" ? (lang === "nl" ? "Wachtwoord" : "Password") : (lang === "nl" ? "Minimaal 6 karakters" : "At least 6 characters")}
                 className="w-full px-4 py-3 text-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition"
               />
             </div>
@@ -520,7 +531,11 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-2"
             >
               {authSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {authSubmitting ? "Bezig met laden..." : authMode === "login" ? "Inloggen" : "Account Registreren"}
+              {authSubmitting 
+                ? (lang === "nl" ? "Bezig met laden..." : "Loading...") 
+                : authMode === "login" 
+                  ? (lang === "nl" ? "Inloggen" : "Log In") 
+                  : (lang === "nl" ? "Account Registreren" : "Register Account")}
             </button>
 
             <div className="text-center pt-2">
@@ -532,7 +547,9 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
                 }}
                 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
               >
-                {authMode === "login" ? "Nog geen account? Registreer hier" : "Heb je al een account? Log in"}
+                {authMode === "login" 
+                  ? (lang === "nl" ? "Nog geen account? Registreer hier" : "No account yet? Register here") 
+                  : (lang === "nl" ? "Heb je al een account? Log in" : "Already have an account? Log in")}
               </button>
             </div>
           </form>
@@ -541,14 +558,16 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
         <>
           <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl p-4 mb-6 flex justify-between items-center">
             <div className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
-              Je bent ingelogd als <span className="font-bold underline">{currentUser.email}</span>. Je quizzen worden veilig in de cloud bewaard!
+              {lang === "nl" ? "Je bent ingelogd als " : "You are logged in as "}
+              <span className="font-bold underline">{currentUser.email}</span>
+              {lang === "nl" ? ". Je quizzen worden veilig in de cloud bewaard!" : ". Your quizzes are securely saved in the cloud!"}
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-200 underline cursor-pointer"
             >
-              Uitloggen
+              {lang === "nl" ? "Uitloggen" : "Sign Out"}
             </button>
           </div>
 
@@ -562,7 +581,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800"
           }`}
         >
-          Mijn Quizzen ({quizzes.length})
+          {lang === "nl" ? "Mijn Quizzen" : "My Quizzes"} ({quizzes.length})
         </button>
         <button
           onClick={() => {
@@ -579,7 +598,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
               : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800"
           }`}
         >
-          <Plus className="w-4 h-4" /> Handmatig Maken
+          <Plus className="w-4 h-4" /> {lang === "nl" ? "Handmatig Maken" : "Create Manually"}
         </button>
       </div>
 
@@ -589,14 +608,18 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-              <p className="text-gray-500 dark:text-slate-400">Laden van jouw quizzen...</p>
+              <p className="text-gray-500 dark:text-slate-400">{lang === "nl" ? "Laden van jouw quizzen..." : "Loading your quizzes..."}</p>
             </div>
           ) : quizzes.length === 0 ? (
             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-gray-300 dark:border-slate-800">
               <HelpCircle className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">Nog geen quizzen gevonden</h2>
+              <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">
+                {lang === "nl" ? "Nog geen quizzen gevonden" : "No quizzes found yet"}
+              </h2>
               <p className="text-gray-500 dark:text-slate-400 max-w-sm mx-auto mb-6">
-                Creëer direct jouw eerste interactieve quiz en host hem live voor je vrienden of collega's!
+                {lang === "nl" 
+                  ? "Creëer direct jouw eerste interactieve quiz en host hem live voor je vrienden of collega's!"
+                  : "Create your very first live quiz right away to start playing with others!"}
               </p>
               <div className="flex justify-center">
                 <button
@@ -610,7 +633,7 @@ export default function QuizManager({ onHostGame, onBack }: QuizManagerProps) {
                   }}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold shadow-xs transition cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" /> Handmatig Aanmaken
+                  <Plus className="w-4 h-4" /> {lang === "nl" ? "Handmatig Aanmaken" : "Create Manually"}
                 </button>
               </div>
             </div>
