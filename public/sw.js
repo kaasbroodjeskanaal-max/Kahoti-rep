@@ -40,8 +40,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip supabase API requests or foreign URLs
-  if (event.request.url.includes('supabase.co')) {
+  const url = new URL(event.request.url);
+  // Strictly skip the API endpoints (e.g. server API routes, proxies)
+  if (url.pathname.startsWith('/api') || url.pathname.includes('supabase')) {
     return;
   }
 

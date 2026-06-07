@@ -3,9 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 // Obfuscated Supabase credentials to protect them from automated static scanners and scrapers.
 // Decoded dynamically at runtime using secure client methods, falling back to env overrides.
 const getObfuscatedUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Route HTTP REST and auth requests through our same-origin Express server proxy
+    return window.location.origin + '/api/supabase';
+  }
   const encodedFallback = 'YUhSMGNITTZMeTl0YlhwMFpIVmtlWHAwWm5aMmIyOWlkR04zZUM1emRYQmhZbUZ6WlM1amJ3PT0='; // Correct double-base64 url fallback
   try {
-    if (typeof window !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) {
+    if ((import.meta as any).env?.VITE_SUPABASE_URL) {
       return (import.meta as any).env.VITE_SUPABASE_URL;
     }
     return atob(atob(encodedFallback));
@@ -26,7 +30,22 @@ const getObfuscatedKey = (): string => {
   }
 };
 
-const rawSupabaseClient = createClient(getObfuscatedUrl(), getObfuscatedKey());
+// Create the Supabase client with custom WS implementation to keep realtime connections completely standard and direct
+const rawSupabaseClient = createClient(getObfuscatedUrl(), getObfuscatedKey(), {
+  realtime: typeof window !== 'undefined' ? {
+    websocket: class extends WebSocket {
+      constructor(url: string, protocols?: string | string[]) {
+        // Direct ws target bypasses local proxy because WebSocket is unaffected by CORS
+        const rootUrl = 'https://mmztdudyztfvvoobtcwx.supabase.co';
+        const directWsUrl = url.replace(
+          window.location.origin + '/api/supabase',
+          rootUrl.replace(/^http/, 'ws')
+        );
+        super(directWsUrl, protocols);
+      }
+    }
+  } as any : undefined
+});
 
 // --- Security, Throttling & Anti-DDoS Engine ---
 
