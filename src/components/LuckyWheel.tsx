@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion } from "motion/react";
 import { Check, Star, Sparkles, AlertCircle } from "lucide-react";
 
@@ -16,6 +16,7 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [result, setResult] = useState<string | null>(null);
+  const [bulbToggle, setBulbToggle] = useState(false);
   const isSpunRef = useRef(false);
 
   // Constants for drawing the wheel
@@ -29,6 +30,19 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
     "#8B5CF6", // Purple
     "#EC4899", // Pink
   ];
+
+  // Blink bulbs when spinning
+  useEffect(() => {
+    let intervalId: any;
+    if (spinning) {
+      intervalId = setInterval(() => {
+        setBulbToggle((prev) => !prev);
+      }, 150);
+    } else {
+      setBulbToggle(false);
+    }
+    return () => clearInterval(intervalId);
+  }, [spinning]);
 
   // Polar to Cartesian conversion helper to draw SVG arcs
   const polarToCartesian = (
@@ -101,7 +115,7 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
 
         {/* Dynamic Rotatable Svg Wheel */}
         <div 
-          className="w-full h-full rounded-full border-12 border-slate-900 dark:border-slate-800 shadow-2xl relative overflow-hidden bg-slate-900"
+          className="w-full h-full rounded-full border-[10px] border-slate-900 dark:border-slate-800 shadow-2xl relative overflow-hidden bg-slate-900"
           style={{
             transform: `rotate(${rotation}deg)`,
             transition: spinning ? "transform 4.5s cubic-bezier(0.15, 0.85, 0.35, 1)" : "none"
@@ -138,12 +152,31 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
                     fontWeight="900"
                     textAnchor="middle"
                     alignmentBaseline="middle"
-                    transform={`rotate(${textAngle < 180 ? textAngle - 0 : textAngle - 180}, ${textPos.x}, ${textPos.y})`}
+                    transform={`rotate(${textAngle < 185 ? textAngle - 0 : textAngle - 180}, ${textPos.x}, ${textPos.y})`}
                     className="select-none font-mono tracking-tight filter drop-shadow-md"
                   >
                     {opt.length > 12 ? opt.substring(0, 10) + ".." : opt}
                   </text>
                 </g>
+              );
+            })}
+
+            {/* Glowing neon rim bulbs */}
+            {Array.from({ length: 18 }).map((_, idx) => {
+              const angle = (idx * 360) / 18;
+              const pos = polarToCartesian(150, 150, 134, angle);
+              const isLit = spinning ? (idx % 2 === (bulbToggle ? 1 : 0)) : true;
+              return (
+                <circle
+                  key={`bulb-${idx}`}
+                  cx={pos.x}
+                  cy={pos.y}
+                  r="3.5"
+                  fill={isLit ? "#fffb00" : "#555200"}
+                  stroke="#1e293b"
+                  strokeWidth="0.5"
+                  className="transition-all duration-100 filter drop-shadow-[0_0_2px_rgba(253,224,71,0.8)]"
+                />
               );
             })}
 
@@ -160,7 +193,7 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
           <button
             onClick={handleSpin}
             disabled={disabled}
-            className="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-900 font-extrabold text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer border-b-6 border-amber-700 font-display flex items-center justify-center gap-2 mx-auto"
+            className="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-900 font-extrabold text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer border-b-[6px] border-amber-700 font-display flex items-center justify-center gap-2 mx-auto"
           >
             <Sparkles className="w-5 h-5 animate-pulse" /> Spin het Rad! 🎰
           </button>

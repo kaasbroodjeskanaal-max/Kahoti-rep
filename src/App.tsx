@@ -1,13 +1,44 @@
 import { useState, useEffect } from "react";
-import { supabase } from "./supabase";
+import { supabase, subscribeToThreatIntel } from "./supabase";
 import QuizJoin from "./components/QuizJoin";
 import QuizManager from "./components/QuizManager";
 import GameHost from "./components/GameHost";
 import GamePlayer from "./components/GamePlayer";
 import { Quiz } from "./types";
-import { Play, Award, Loader2, Users, Database, Sun, Moon } from "lucide-react";
+import { Play, Award, Loader2, Users, Database, Sun, Moon, ShieldAlert } from "lucide-react";
 
 export default function App() {
+  // Threat Intel & Anti-DDoS Circuit Breaker State
+  const [threatState, setThreatState] = useState<any>(null);
+  const [blockedCountdown, setBlockedCountdown] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToThreatIntel((stats) => {
+      setThreatState(stats);
+      if (stats.isBlocked) {
+        const remaining = Math.ceil((stats.blockedUntil - Date.now()) / 1000);
+        setBlockedCountdown(remaining > 0 ? remaining : 0);
+      } else {
+        setBlockedCountdown(0);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Decrement seconds on countdown thread
+  useEffect(() => {
+    if (blockedCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setBlockedCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [blockedCountdown]);
   const [mode, setMode] = useState<null | "join" | "manage" | "playing" | "hosting">(null);
 
   // Active Session Details
@@ -28,6 +59,47 @@ export default function App() {
       document.documentElement.classList.remove("dark");
     }
   }, [isDark]);
+
+  // Render Screens based on active Mode
+  if (threatState?.isBlocked && blockedCountdown > 0) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none relative z-[99999] transition-all">
+        {/* Glowing warning circle */}
+        <div className="relative mb-6">
+          <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full scale-125 animate-pulse" />
+          <div className="w-24 h-24 rounded-3xl bg-red-500/15 border-2 border-red-500/30 flex items-center justify-center shadow-lg relative z-10 transition">
+            <ShieldAlert className="w-12 h-12 text-red-500 animate-bounce" />
+          </div>
+        </div>
+
+        <div className="max-w-md space-y-4">
+          <span className="bg-red-500/15 border border-red-500/25 text-red-400 font-mono text-[10px] uppercase tracking-[0.25em] font-black px-4 py-2 rounded-full inline-block">
+            🚨 DDoS & Spam Shield Actief
+          </span>
+          <h1 className="text-3xl font-black font-display text-white tracking-tight">
+            Verzoek Snelheidslimiet Overschreden
+          </h1>
+          <p className="text-slate-400 text-sm leading-relaxed font-sans">
+            {threatState.blockedReason || "Het systeem heeft een ongebruikelijk hoge activiteit gedetecteerd vanaf deze browser. De client is tijdelijk geblokkeerd om serveroverbelasting en onnodig egress-verbruik te voorkomen."}
+          </p>
+
+          {/* Massively visual physical countdown card */}
+          <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl flex flex-col items-center justify-center gap-1.5 mt-6">
+            <span className="text-6xl font-black font-mono tracking-tight text-red-500 animate-pulse">
+              {blockedCountdown}s
+            </span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              Tijdelijke Afkoelperiode Actief
+            </span>
+          </div>
+
+          <p className="text-slate-600 text-[10px] leading-normal uppercase tracking-widest pt-4 font-mono font-bold">
+            Kahoti Systeembeveiliging & DDoS Beheersing
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Render Screens based on active Mode
   if (mode === "join") {
@@ -61,6 +133,20 @@ export default function App() {
     return (
       <QuizManager
         onHostGame={(quiz) => {
+          const lastExit = localStorage.getItem("last_session_exit_timestamp");
+          const lastStart = localStorage.getItem("last_session_start_timestamp");
+          const now = Date.now();
+          if (lastExit && now - Number(lastExit) < 10000) {
+            const secondsLeft = Math.ceil((10000 - (now - Number(lastExit))) / 1000);
+            alert(`Niet zo snel! Je hebt net een live sessie gestorven/gestopt. Wacht nog ${secondsLeft} seconden om een nieuwe op te starten.`);
+            return;
+          }
+          if (lastStart && now - Number(lastStart) < 15000) {
+            const secondsLeft = Math.ceil((15000 - (now - Number(lastStart))) / 1000);
+            alert(`Snelheidslimiet! Wacht nog ${secondsLeft} seconden tussen het herhaaldelijk openen/hosten van live quizzen.`);
+            return;
+          }
+          localStorage.setItem("last_session_start_timestamp", String(now));
           setActiveQuiz(quiz);
           setMode("hosting");
         }}
@@ -74,6 +160,7 @@ export default function App() {
       <GameHost
         quiz={activeQuiz}
         onExit={() => {
+          localStorage.setItem("last_session_exit_timestamp", String(Date.now()));
           setMode("manage");
           setActiveQuiz(null);
         }}

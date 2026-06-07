@@ -1,0 +1,26 @@
+{
+  "short_name": "Kahoti",
+  "name": "Kahoti",
+  "description": "Een live multiplayer quiz en enquête platform met realtime interacties, sliders en puzzels.",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["games", "education"]
+}

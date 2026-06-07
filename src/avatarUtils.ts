@@ -164,15 +164,24 @@ export function getAvatarUrl(
 
 // Decodes a combined rawNickname like: "KaasKoning:::3|4|1|2" or falls back
 export function parseNicknameAndAvatar(rawNickname: string) {
-  if (!rawNickname || !rawNickname.includes(":::")) {
-    const name = rawNickname || "Speler";
+  let isVerified = false;
+  let cleanRaw = rawNickname || "";
+  
+  if (cleanRaw.includes("__verified__")) {
+    isVerified = true;
+    cleanRaw = cleanRaw.replace("__verified__", "");
+  }
+
+  if (!cleanRaw || !cleanRaw.includes(":::")) {
+    const name = cleanRaw || "Speler";
     return {
       displayName: name,
-      avatarUrl: getAvatarUrl(name, 0, 0, 0, 0)
+      avatarUrl: getAvatarUrl(name, 0, 0, 0, 0),
+      isVerified
     };
   }
 
-  const [name, avatarCode] = rawNickname.split(":::", 2);
+  const [name, avatarCode] = cleanRaw.split(":::", 2);
   const parts = avatarCode ? avatarCode.split("|").map(Number) : [];
   const baseIdx = !parts[0] || isNaN(parts[0]) ? 0 : parts[0];
   const hatIdx = !parts[1] || isNaN(parts[1]) ? 0 : parts[1];
@@ -188,8 +197,25 @@ export function parseNicknameAndAvatar(rawNickname: string) {
 
   return {
     displayName: name,
-    avatarUrl: getAvatarUrl(name, baseIdx, hatIdx, accIdx, gradIdx, hX, hY, hS, aX, aY, aS)
+    avatarUrl: getAvatarUrl(name, baseIdx, hatIdx, accIdx, gradIdx, hX, hY, hS, aX, aY, aS),
+    isVerified
   };
+}
+
+// Parses a quiz name and returns whether it is created by a verified user
+export function parseQuizTitle(rawTitle: string) {
+  let isVerified = false;
+  let isLocked = false;
+  let cleanTitle = rawTitle || "";
+  if (cleanTitle.includes("__locked__")) {
+    isLocked = true;
+    cleanTitle = cleanTitle.replace("__locked__", "");
+  }
+  if (cleanTitle.includes("__verified__")) {
+    isVerified = true;
+    cleanTitle = cleanTitle.replace("__verified__", "");
+  }
+  return { cleanTitle, isVerified, isLocked };
 }
 
 export function ShapeIcon({ idx, className = "w-6 h-6 shrink-0 fill-current" }: { idx: number; className?: string }) {

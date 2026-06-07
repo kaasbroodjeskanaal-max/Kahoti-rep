@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy } from "lucide-react";
+import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
 import confetti from "canvas-confetti";
@@ -23,9 +23,15 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   const [isLoading, setIsLoading] = useState(true);
   const [playerUid, setPlayerUid] = useState<string>("");
   const [playerCountdown, setPlayerCountdown] = useState<number | string>(3);
+  const [isKicked, setIsKicked] = useState(false);
+  const [puzzleItems, setPuzzleItems] = useState<{ originalIndex: number; text: string }[]>([]);
+  const [sliderVal, setSliderVal] = useState<number>(3);
 
   const [allPlayersSorted, setAllPlayersSorted] = useState<{ id: string; nickname: string; score: number }[]>([]);
   const [playerRank, setPlayerRank] = useState<number | null>(null);
+
+  const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
+  const activeQuestion = questions[currentQuestionIdx];
 
   useEffect(() => {
     if (session?.status === "ended" && sessionId && playerUid) {
@@ -172,9 +178,19 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
         .select("*")
         .eq("id", playerUid)
         .eq("session_id", sessionId)
-        .single();
+        .maybeSingle();
 
-      if (!pErr && playerData) {
+      if (pErr) {
+        console.error("Fout tijdens ophalen spelerdata:", pErr);
+      }
+
+      if (!isLoading && !playerData) {
+        setIsKicked(true);
+        setIsLoading(false);
+        return;
+      }
+
+      if (playerData) {
         setSelf({
           id: playerData.id,
           nickname: playerData.nickname,
@@ -185,7 +201,9 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
           isHost: playerData.is_host,
           joinedAt: playerData.joined_at,
         });
-        setHasAnswered(playerData.current_answer_index !== null);
+        if (playerData.current_answer_index !== null) {
+          setHasAnswered(true);
+        }
       }
       setIsLoading(false);
     } catch (err) {
@@ -238,6 +256,73 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
       return () => clearInterval(countdownInterval);
     }
   }, [session?.status, session?.currentQuestionIndex]);
+
+  // Reset answer states when the question index increments/changes
+  useEffect(() => {
+    if (session?.currentQuestionIndex !== undefined) {
+      setHasAnswered(false);
+      setSelectedIndices([]);
+      const currentQ = questions[session.currentQuestionIndex];
+      if (currentQ && currentQ.questionType === "slider" && currentQ.options) {
+        setSliderVal(Math.ceil(currentQ.options.length / 2));
+      } else {
+        setSliderVal(3);
+      }
+    }
+  }, [session?.currentQuestionIndex, questions]);
+
+  // Setup puzzle shuffling on activeQuestion change
+  useEffect(() => {
+    if (activeQuestion && activeQuestion.questionType === "puzzle") {
+      const initialItems = activeQuestion.options.map((text, idx) => ({
+        originalIndex: idx,
+        text: text
+      }));
+      // Securely shuffle them so they are not in the correct [0, 1, 2, 3] order initially
+      let shuffled = [...initialItems];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      // Safety: check if shuffle is exactly sorted. If so, swap adjacent items
+      const isMatched = shuffled.every((item, idx) => item.originalIndex === idx);
+      if (isMatched && shuffled.length > 1) {
+        [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+      }
+      setPuzzleItems(shuffled);
+    } else {
+      setPuzzleItems([]);
+    }
+  }, [activeQuestion?.id]);
+
+  const moveItem = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= puzzleItems.length) return;
+    const updated = [...puzzleItems];
+    const [removed] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, removed);
+    setPuzzleItems(updated);
+  };
+
+  const getPuzzleCardColor = (text: string, idx: number) => {
+    const clean = text.toLowerCase();
+    if (clean.includes("rood") || clean.includes("red") || clean.includes("🔴")) return "from-red-600 to-red-500 text-white shadow-red-500/20";
+    if (clean.includes("blauw") || clean.includes("blue") || clean.includes("🔵")) return "from-blue-600 to-blue-500 text-white shadow-blue-500/20";
+    if (clean.includes("geel") || clean.includes("yellow") || clean.includes("🟡")) return "from-yellow-500 to-yellow-400 text-slate-950 shadow-yellow-500/10";
+    if (clean.includes("groen") || clean.includes("green") || clean.includes("🟢")) return "from-emerald-600 to-emerald-500 text-white shadow-emerald-500/20";
+    if (clean.includes("oranje") || clean.includes("orange") || clean.includes("🟠")) return "from-orange-500 to-orange-400 text-white shadow-orange-500/20";
+    if (clean.includes("paars") || clean.includes("purple") || clean.includes("🟣")) return "from-purple-600 to-purple-500 text-white shadow-purple-500/20";
+    
+    // fallback based on index
+    const fallbacks = [
+      "from-red-600 to-red-500 text-white shadow-red-500/10",
+      "from-blue-600 to-blue-500 text-white shadow-blue-500/10",
+      "from-yellow-500 to-yellow-400 text-slate-950 shadow-yellow-500/10",
+      "from-emerald-600 to-emerald-500 text-white shadow-emerald-500/10",
+      "from-purple-600 to-purple-500 text-white shadow-purple-500/10",
+      "from-orange-500 to-orange-400 text-white shadow-orange-500/10",
+    ];
+    return fallbacks[idx % fallbacks.length];
+  };
 
   // Helper to submit raw answer index or bitmask to DB
   const submitAnswerToSupabase = async (answerValue: number) => {
@@ -304,8 +389,6 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
     }
   }, [session?.status, session?.questionStartTime, session?.questionDuration]);
 
-  const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
-  const activeQuestion = questions[currentQuestionIdx];
   const firstQ = questions[0];
   const playerTheme = activeQuestion?.theme || firstQ?.theme || "default";
   const lobbyTheme = activeQuestion?.lobbyTheme || firstQ?.lobbyTheme || "default";
@@ -355,21 +438,49 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
   };
 
   const optionColors = [
-    "bg-red-500 hover:bg-red-600 active:bg-red-750",
-    "bg-blue-500 hover:bg-blue-600 active:bg-blue-750",
+    "bg-red-500 hover:bg-red-600 active:bg-red-700",
+    "bg-blue-500 hover:bg-blue-600 active:bg-blue-700",
     "bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700",
-    "bg-green-500 hover:bg-green-600 active:bg-green-750",
-    "bg-purple-500 hover:bg-purple-600 active:bg-purple-750",
-    "bg-orange-500 hover:bg-orange-600 active:bg-orange-750",
+    "bg-green-500 hover:bg-green-600 active:bg-green-700",
+    "bg-purple-500 hover:bg-purple-600 active:bg-purple-700",
+    "bg-orange-500 hover:bg-orange-600 active:bg-orange-700",
   ];
 
   const shapes = ["▲", "♦", "●", "■", "★", "♣"];
 
+  const currentThemeName = session?.status === "lobby" ? (lobbyTheme || "default") : (playerTheme || "default");
+  const isThemeDark = ["space", "halloween", "neon"].includes(currentThemeName) || (currentThemeName === "default" && localStorage.getItem("quiz_dark_mode") === "true");
+  const textTitleClass = isThemeDark ? "text-white font-black" : "text-slate-800 font-black";
+  const textMutedClass = isThemeDark ? "text-slate-300" : "text-gray-500";
+
+  if (isKicked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center text-center p-6 font-sans">
+        <div className="max-w-md w-full bg-slate-900 border border-red-900/40 p-10 rounded-3xl shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-red-500/5 blur-3xl rounded-full scale-110" />
+          <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500 rounded-full flex items-center justify-center text-red-500 text-3xl font-black mx-auto mb-6 relative z-10">
+            🚫
+          </div>
+          <h2 className="text-3xl font-black font-display text-white mb-3 relative z-10 leading-snug">Je bent verwijderd</h2>
+          <p className="text-slate-400 text-sm mb-8 font-sans leading-relaxed relative z-10">
+            De host heeft je uit deze quizlobby gekickt. Dit kan zijn wegens een ongepaste naam, onsportief gedrag of omdat de lobby opnieuw is opgestart.
+          </p>
+          <button
+            onClick={onExit}
+            className="w-full bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-extrabold font-display py-4 rounded-xl shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all cursor-pointer relative z-10"
+          >
+            Terug naar Startpagina
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`min-h-[85vh] ${activeTheme.bgClasses} text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-all duration-700 relative`}>
+    <div className={`min-h-screen w-full ${activeTheme.bgClasses} ${isThemeDark ? "text-white" : "text-slate-800"} flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-all duration-700 relative`}>
       {/* Decorative background overlays for themes */}
       {activeTheme.name !== "Standaard" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
           {activeTheme.name === "Winter" && (
             <>
               <div className="absolute top-[10%] left-[15%] text-2xl animate-bounce">❄️</div>
@@ -434,13 +545,13 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               </div>
 
               <div className="space-y-2">
-                <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-750 font-bold text-xs rounded-full uppercase tracking-wider">
+                <span className="inline-block px-3 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full uppercase tracking-wider">
                   Ingelogd als {displayName}
                 </span>
-                <h1 className="text-2xl font-black font-display text-slate-800">
+                <h1 className={`text-2xl font-display ${textTitleClass}`}>
                   Je bent binnen!
                 </h1>
-                <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                <p className={`text-sm max-w-xs mx-auto ${textMutedClass}`}>
                   Wacht geduldig tot de host het spel start. Je naam verschijnt op het grote scherm!
                 </p>
               </div>
@@ -580,11 +691,155 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                       }}
                     />
                   </div>
+                ) : activeQuestion.questionType === "puzzle" ? (
+                  <div className="flex-1 flex flex-col gap-4 pb-4 select-none">
+                    <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-2xl text-center">
+                      <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">🧩 Verplaats de kaarten in de correcte volgorde!</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bovenste is #1, onderste is de laatste.</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2.5">
+                      <AnimatePresence mode="popLayout">
+                        {puzzleItems.map((item, idx) => {
+                          const cardColor = getPuzzleCardColor(item.text, item.originalIndex);
+                          return (
+                            <motion.div
+                              layout
+                              key={item.originalIndex}
+                              initial={{ opacity: 0, y: 15 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                              className={`flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r ${cardColor} shadow-md border border-white/10`}
+                            >
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                <span className="w-7 h-7 rounded-lg bg-black/25 flex items-center justify-center font-black font-mono text-xs text-white shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-extrabold text-white truncate text-base">
+                                  {item.text}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => moveItem(idx, idx - 1)}
+                                  disabled={idx === 0}
+                                  className="w-9 h-9 rounded-xl flex items-center justify-center bg-black/20 hover:bg-black/35 text-white disabled:opacity-20 disabled:hover:bg-black/20 transition-all cursor-pointer"
+                                  title="Omhoog verplaatsen"
+                                >
+                                  <ChevronUp className="w-5 h-5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveItem(idx, idx + 1)}
+                                  disabled={idx === puzzleItems.length - 1}
+                                  className="w-9 h-9 rounded-xl flex items-center justify-center bg-black/20 hover:bg-black/35 text-white disabled:opacity-20 disabled:hover:bg-black/20 transition-all cursor-pointer"
+                                  title="Omlaag verplaatsen"
+                                >
+                                  <ChevronDown className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        let val = 0;
+                        for (let i = 0; i < puzzleItems.length; i++) {
+                          val = val * 10 + puzzleItems[i].originalIndex;
+                        }
+                        await submitAnswerToSupabase(val);
+                      }}
+                      className="w-full mt-2 bg-purple-650 hover:bg-purple-550 text-white font-display font-black py-4 rounded-2xl border-b-6 border-purple-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
+                    >
+                      Volgorde Bevestigen 🚀
+                    </button>
+                  </div>
+                ) : activeQuestion.questionType === "slider" ? (
+                  <div className="flex-1 flex flex-col gap-6 py-4 px-2 space-y-4 select-none">
+                    <div className="text-center">
+                      <span className="text-sm font-black tracking-widest text-teal-400 uppercase flex items-center justify-center gap-1">
+                        🎚️ Schuif naar het juiste getal
+                      </span>
+                      <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                        Gebruik de schuifbalk om een waarde van 1 tot {activeQuestion.options?.length ?? 5} te kiezen!
+                      </p>
+                    </div>
+
+                    {/* Massive visual value display */}
+                    <div className="relative flex justify-center items-center py-6">
+                      <div className="absolute inset-0 bg-teal-500/5 blur-2xl rounded-full" />
+                      <motion.div
+                        key={sliderVal}
+                        initial={{ scale: 0.75, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="w-28 h-28 rounded-full bg-teal-500 text-white text-5xl font-black font-display flex items-center justify-center shadow-lg shadow-teal-500/25 border-4 border-white relative"
+                      >
+                        {sliderVal}
+                        <div className="absolute -bottom-1 bg-black text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">
+                          SCHAAL
+                        </div>
+                      </motion.div>
+                    </div>
+
+                    {/* Highly tactile slider input */}
+                    <div className="space-y-4 px-4">
+                      <input
+                        type="range"
+                        min="1"
+                        max={activeQuestion.options?.length ?? 5}
+                        step="1"
+                        value={sliderVal}
+                        onChange={(e) => setSliderVal(Number(e.target.value))}
+                        className="w-full h-3 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-teal-500 border border-slate-800"
+                      />
+                      <div className="flex justify-between text-xs font-mono text-slate-400 px-1 font-bold">
+                        <span>Min (1)</span>
+                        <span>Midden ({Math.ceil((activeQuestion.options?.length ?? 5) / 2)})</span>
+                        <span>Max ({activeQuestion.options?.length ?? 5})</span>
+                      </div>
+                    </div>
+
+                    {/* Selector Dots */}
+                    <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+                      {(activeQuestion.options || ["1", "2", "3", "4", "5"]).map((_, idx) => {
+                        const num = idx + 1;
+                        return (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setSliderVal(num)}
+                            className={`w-9 h-9 rounded-full font-black text-sm flex items-center justify-center border-2 transition-all cursor-pointer ${
+                              sliderVal === num
+                                ? "bg-teal-500 border-teal-600 text-white shadow-md scale-110"
+                                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            {num}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        await submitAnswerToSupabase(sliderVal - 1);
+                      }}
+                      className="w-full bg-teal-600 hover:bg-teal-500 text-white font-display font-black py-4 rounded-2xl border-b-6 border-teal-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
+                    >
+                      Bevestig Getal ({sliderVal}) ⭐
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex-1 flex flex-col gap-3 pb-4">
                     {/* Instructions banner */}
                     {activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1 && (
-                      <div className="bg-indigo-50 dark:bg-indigo-950/20 text-indigo-750 dark:text-indigo-350 p-3 rounded-xl border border-indigo-100 dark:border-indigo-950/40 text-xs font-bold flex items-center gap-2">
+                      <div className="bg-indigo-50 dark:bg-indigo-950/20 text-indigo-800 dark:text-indigo-200 p-3 rounded-xl border border-indigo-100 dark:border-indigo-950/40 text-xs font-bold flex items-center gap-2">
                         <span className="animate-pulse">💡</span>
                         <span>MULTI-SELECT: Vink alle juiste opties aan en druk op de grote knop onderaan!</span>
                       </div>
@@ -638,15 +893,15 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                 )
               ) : (
                 /* WAITING TIMER STATE FOR FASTER RESPONDERS */
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 bg-white border border-slate-100 rounded-3xl p-8 shadow-xs">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-full border border-emerald-100 text-emerald-600 flex items-center justify-center text-2xl font-bold animate-bounce">
+                <div className={`${activeTheme.cardBg} flex-1 flex flex-col items-center justify-center text-center space-y-4 rounded-3xl p-8 shadow-md border border-white/5`}>
+                  <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-400/30 flex items-center justify-center text-2xl font-bold animate-bounce shadow-md">
                     ✓
                   </div>
-                  <h3 className="text-2xl font-black text-slate-800 font-display">Antwoord ingediend!</h3>
-                  <p className="text-gray-500 text-sm max-w-xs">
+                  <h3 className={`text-2xl font-display ${textTitleClass}`}>Antwoord ingediend!</h3>
+                  <p className={`text-sm max-w-xs ${textMutedClass}`}>
                     Je was supersnel! Wacht even tot de rest klaar is of de tijd afloopt.
                   </p>
-                  <Loader2 className="w-6 h-6 animate-spin text-slate-350" />
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-450" />
                 </div>
               )}
             </motion.div>
@@ -762,21 +1017,21 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto py-8"
             >
-              <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600">
+              <div className="w-16 h-16 bg-indigo-500/20 border border-indigo-550 rounded-2xl flex items-center justify-center text-indigo-300 shadow-md">
                 <Award className="w-8 h-8" />
               </div>
 
               <div className="space-y-1">
-                <p className="text-indigo-600 text-sm font-extrabold tracking-wider uppercase">Tussenstand</p>
-                <h2 className="text-3xl font-black font-display text-slate-800">
+                <p className="text-indigo-400 text-sm font-extrabold tracking-wider uppercase">Tussenstand</p>
+                <h2 className={`text-3xl font-display ${textTitleClass}`}>
                   Mijn Score: {self.score} pt
                 </h2>
-                <p className="text-gray-500 text-sm">
+                <p className={`text-sm ${textMutedClass}`}>
                   De host toont nu de top 5 op het grote scherm. Maak je klaar voor de volgende ronde!
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-2 text-sm rounded-full border border-indigo-150 font-bold justify-center font-mono animate-pulse">
+              <div className="flex items-center gap-2 bg-indigo-500/25 text-indigo-300 px-4 py-2 text-sm rounded-full border border-indigo-400/40 font-bold justify-center font-mono animate-pulse">
                 Huidige streak: {self.streak} 🔥
               </div>
             </motion.div>
@@ -811,10 +1066,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                     <span className="bg-indigo-500/10 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
                       Live Finale Onthulling
                     </span>
-                    <h1 className="text-3xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                    <h1 className={`text-3xl font-display ${textTitleClass} leading-tight`}>
                       Op welke plaats sta jij?
                     </h1>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    <p className={`text-sm ${textMutedClass}`}>
                       De host is nu live de eindstand aan het onthullen! Kijk mee hoe de slots openen... 🤫
                     </p>
                   </div>
@@ -923,10 +1178,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                     <p className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
                       🏆 EERSTE PLAATS - CHAMPION! 🏆
                     </p>
-                    <h1 className="text-4xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                    <h1 className={`text-4xl font-display ${textTitleClass} leading-tight`}>
                       EINDWINNAAR!
                     </h1>
-                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                    <p className={`font-medium text-sm ${textMutedClass}`}>
                       Gefeliciteerd {displayName}! Je bent de absolute winnaar geworden met een schitterende score van {self.score} pt!
                     </p>
                   </div>
@@ -956,10 +1211,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                     <p className="text-slate-300 text-xs font-black uppercase tracking-widest font-mono">
                       🥈 TWEEDE PLAATS - SILVER! 🥈
                     </p>
-                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
                       Fantastisch!
                     </h1>
-                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                    <p className={`font-medium text-sm ${textMutedClass}`}>
                       Gefeliciteerd {displayName}! Je hebt een waanzinnige 2e plaats bemachtigd op het podium met {self.score} pt!
                     </p>
                   </div>
@@ -989,10 +1244,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                     <p className="text-amber-500 text-xs font-black uppercase tracking-widest font-mono">
                       🥉 DERDE PLAATS - BRONZE! 🥉
                     </p>
-                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
                       Super gedaan!
                     </h1>
-                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                    <p className={`font-medium text-sm ${textMutedClass}`}>
                       Mooi werk {displayName}! Je eindigt op een eervolle 3e plaats en claimt brons met {self.score} pt!
                     </p>
                   </div>
@@ -1022,10 +1277,10 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                     <p className="text-indigo-400 text-xs font-black uppercase tracking-widest font-mono">
                       🎖️ GEFELICITEERD - FINALIST! 🎖️
                     </p>
-                    <h1 className="text-3.5xl font-black font-display text-slate-800 dark:text-white leading-tight">
+                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
                       {playerRank}e Plaats!
                     </h1>
-                    <p className="text-slate-650 dark:text-slate-300 font-medium text-sm">
+                    <p className={`font-medium text-sm ${textMutedClass}`}>
                       Wauw {displayName}! Je bent geëindigd als een van de officiële top finalisten (de {playerRank}e plaats!) met een score van {self.score} pt! Wat een prestatie!
                     </p>
                   </div>
@@ -1053,8 +1308,8 @@ export default function GamePlayer({ sessionId, nickname, onExit }: GamePlayerPr
                 </div>
 
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-black font-display text-slate-800 dark:text-white">Einde van de Quiz!</h1>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                  <h1 className={`text-3xl font-display ${textTitleClass}`}>Einde van de Quiz!</h1>
+                  <p className={`text-sm ${textMutedClass}`}>
                     Gefeliciteerd met het volbrengen van alle vragen! Jouw score en positie zijn hieronder zichtbaar.
                   </p>
                 </div>

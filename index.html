@@ -1,9 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="nl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kahoti</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Kahoti: Live Volgorde Quiz &amp; Enquêtes</title>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#020617" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Kahoti" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    
+    <!-- Register Service Worker in non-blocking thread -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('[PWA] Service Worker geregistreerd met scope:', reg.scope))
+            .catch((err) => console.warn('[PWA] Service Worker registratie mislukt:', err));
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

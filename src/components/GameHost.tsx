@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy } from "lucide-react";
+import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
-import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
+import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
 
 interface GameHostProps {
   quiz: Quiz;
@@ -641,9 +641,34 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
   };
 
   const getStats = () => {
-    const stats = [0, 0, 0, 0];
+    if (!currentQuestion) return [0, 0, 0, 0];
+    if (currentQuestion.questionType === "slider") {
+      const stats = [0, 0, 0, 0, 0];
+      players.forEach((p) => {
+        if (p.currentAnswerIndex !== null && p.currentAnswerIndex >= 0 && p.currentAnswerIndex <= 4) {
+          stats[p.currentAnswerIndex]++;
+        }
+      });
+      return stats;
+    }
+    if (currentQuestion.questionType === "puzzle") {
+      let correct = 0;
+      let incorrect = 0;
+      players.forEach((p) => {
+        if (p.currentAnswerIndex !== null && p.currentAnswerIndex !== undefined) {
+          if (checkIsCorrect(p.currentAnswerIndex, currentQuestion)) {
+            correct++;
+          } else {
+            incorrect++;
+          }
+        }
+      });
+      return [correct, incorrect];
+    }
+    const len = currentQuestion.options ? currentQuestion.options.length : 4;
+    const stats = Array(len).fill(0);
     players.forEach((p) => {
-      if (p.currentAnswerIndex !== null && p.currentAnswerIndex >= 0 && p.currentAnswerIndex <= 3) {
+      if (p.currentAnswerIndex !== null && p.currentAnswerIndex >= 0 && p.currentAnswerIndex < len) {
         stats[p.currentAnswerIndex]++;
       }
     });
@@ -755,7 +780,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
     <div className={`min-h-screen ${activeTheme.bgClasses} font-sans flex flex-col justify-between transition-all duration-700 relative`}>
       {/* Decorative background overlays for themes */}
       {activeTheme.name !== "Standaard" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
           {activeTheme.name === "Winter" && (
             <>
               <div className="absolute top-[10%] left-[15%] text-3xl animate-bounce">❄️</div>
@@ -817,7 +842,19 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
               />
               <div>
                 <span className="text-xs text-indigo-400 tracking-wider font-bold uppercase">Hosten</span>
-                <h2 className="text-xl font-bold font-display text-slate-100 line-clamp-1">{quiz.title}</h2>
+                {(() => {
+                  const { cleanTitle, isVerified: isQuizVerified } = parseQuizTitle(quiz.title || "");
+                  return (
+                    <h2 className="text-xl font-bold font-display text-slate-100 line-clamp-1 flex items-center gap-1.55">
+                      {cleanTitle}
+                      {isQuizVerified && (
+                        <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-4 h-4 text-[9px] font-black shrink-0 shadow-sm" title="Geverifieerde Maker">
+                          ✓
+                        </span>
+                      )}
+                    </h2>
+                  );
+                })()}
               </div>
             </div>
             <button
@@ -839,13 +876,53 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   className="space-y-8 text-center"
                 >
                   <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto items-center">
-                    <div className="bg-slate-950 p-8 rounded-3xl border border-slate-800 space-y-4 text-center">
-                      <p className="text-indigo-400 font-bold uppercase tracking-wider text-sm">Join via deze Spelcode</p>
-                      <h1 className="text-7xl font-extrabold font-mono tracking-wider bg-linear-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent select-all">
-                        {String(code || "").padStart(6, "0").slice(0, 3)} {String(code || "").padStart(6, "0").slice(3)}
-                      </h1>
-                      <div className="text-slate-400 text-sm pt-2">
-                        Voer deze 6 cijfers in op de startpagina om deze quiz te betreden.
+                    <div className="bg-slate-950 p-8 rounded-3xl border border-slate-800 space-y-4 text-center flex flex-col justify-between min-h-[220px]">
+                      <div>
+                        <p className="text-indigo-400 font-bold uppercase tracking-wider text-sm">Join via deze Spelcode</p>
+                        <h1 className="text-7xl font-extrabold font-mono tracking-wider bg-linear-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent select-all mt-2">
+                          {String(code || "").padStart(6, "0").slice(0, 3)} {String(code || "").padStart(6, "0").slice(3)}
+                        </h1>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="text-slate-400 text-sm">
+                          Voer deze 6 cijfers in op de startpagina om deze quiz te betreden.
+                        </div>
+                        <div className="flex justify-center">
+                          <button
+                            onClick={async () => {
+                              if (!sessionId || !session) return;
+                              const { isLocked } = parseQuizTitle(session.quizTitle || "");
+                              const cleanName = session.quizTitle.replace("__locked__", "");
+                              const newTitle = isLocked ? cleanName : `${cleanName}__locked__`;
+                              
+                              const { error } = await supabase
+                                .from("sessions")
+                                .update({ quiz_title: newTitle })
+                                .eq("id", sessionId);
+
+                              if (error) {
+                                alert("Fout bij wijzigen status: " + error.message);
+                              } else {
+                                setSession(prev => prev ? { ...prev, quizTitle: newTitle } : null);
+                              }
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold tracking-wider uppercase transition-all duration-200 cursor-pointer shadow-sm border ${
+                              session && parseQuizTitle(session.quizTitle || "").isLocked
+                                ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
+                                : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            }`}
+                          >
+                            {session && parseQuizTitle(session.quizTitle || "").isLocked ? (
+                              <>
+                                <Lock className="w-4 h-4" /> Lobby Gesloten (Klik om te openen)
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="w-4 h-4" /> Lobby Open (Klik om te sluiten)
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -874,18 +951,47 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                     ) : (
                       <div className="flex flex-wrap justify-center items-center gap-4 max-h-[350px] overflow-y-auto p-2">
                         {players.map((p, idx) => {
-                          const { displayName, avatarUrl } = parseNicknameAndAvatar(p.nickname || "");
+                          const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(p.nickname || "");
                           return (
                           <motion.div
                             key={p.id}
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: idx * 0.04 }}
-                            className="bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-2xl text-white font-bold font-display flex items-center gap-3 shadow-md hover:border-indigo-500 transition-colors duration-200 max-w-[220px]"
+                            className="group bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-2xl text-white font-bold font-display flex items-center gap-3 shadow-md hover:border-red-500/50 transition-colors duration-200 min-w-[180px] max-w-[240px] relative overflow-hidden"
                           >
                             <img src={avatarUrl} alt="avatar" className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 shrink-0" />
-                            <span className="truncate text-sm flex-1 text-left text-slate-100">{displayName}</span>
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full shrink-0 relative">
+                            <div className="flex items-center gap-1 min-w-0 flex-1 z-10">
+                              <span className="truncate text-sm text-left text-slate-100">{displayName}</span>
+                              {isVerified && (
+                                <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Hover Kick Action Button */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Weet je zeker dat je ${displayName} wilt verwijderen (kicken)?`)) {
+                                  try {
+                                    await supabase.from("players").delete().eq("id", p.id);
+                                    // Instantly update local list
+                                    setPlayers(prev => prev.filter(item => item.id !== p.id));
+                                  } catch (err) {
+                                    console.error("Fout bij kicken speler:", err);
+                                  }
+                                }
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-3 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-1.5 rounded-lg border border-red-500/20 shadow-sm z-20 cursor-pointer flex items-center justify-center"
+                              title="Kick speler"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Standard ping dot, hidden on hover */}
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full shrink-0 relative group-hover:opacity-0 transition-opacity z-10">
                               <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-75" />
                             </div>
                           </motion.div>
@@ -914,11 +1020,24 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                     </span>
                   </div>
                   
-                  <h2 className="text-4xl md:text-5xl font-black font-display max-w-3xl mx-auto text-slate-100 leading-snug px-4 tracking-tight">
-                    {session.currentQuestionIndex === 0 
-                      ? `"${session?.quizTitle || quiz?.title || "Laadt quiz..."}"`
-                      : `"${currentQuestion?.questionText || "Volgende vraag..."}"`
-                    }
+                  <h2 className="text-4xl md:text-5xl font-black font-display max-w-3xl mx-auto text-slate-100 leading-snug px-4 tracking-tight flex flex-wrap items-center justify-center gap-2">
+                    {session.currentQuestionIndex === 0 ? (
+                      (() => {
+                        const { cleanTitle, isVerified: isQuizVerified } = parseQuizTitle(session?.quizTitle || quiz?.title || "Laadt quiz...");
+                        return (
+                          <span className="inline-flex items-center justify-center gap-2 flex-wrap">
+                            "{cleanTitle}"
+                            {isQuizVerified && (
+                              <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-5 h-5 text-[11px] font-bold shrink-0 shadow-sm" title="Geverifieerde Maker">
+                                ✓
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()
+                    ) : (
+                      `"${currentQuestion?.questionText || "Volgende vraag..."}"`
+                    )}
                   </h2>
 
                   <div className="relative flex items-center justify-center">
@@ -1028,12 +1147,59 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                       </p>
                       <p className="text-slate-400 text-sm">Bereid je voor om snel te antwoorden!</p>
                     </div>
+                  ) : currentQuestion.questionType === "slider" ? (
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center flex flex-col justify-center items-center gap-6 min-h-[220px] relative overflow-hidden w-full max-w-2xl mx-auto shadow-md">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-teal-500/10 blur-3xl text-teal-500" />
+                      
+                      <div className="w-16 h-16 rounded-2xl bg-teal-505/10 text-teal-400 flex items-center justify-center border border-teal-500/25 shadow-inner">
+                        <Sliders className="w-8 h-8 animate-pulse text-teal-400" />
+                      </div>
+
+                      <div className="space-y-2 relative z-10 w-full max-w-lg">
+                        <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider">Kies op een schaal van 1 tot 5 🎚️</h2>
+                        <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-800 mt-4 px-6 font-mono font-bold text-slate-300">
+                          {[1, 2, 3, 4, 5].map((num) => (
+                            <span key={num} className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-lg shadow-sm font-extrabold text-white">
+                              {num}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-500 pt-1 font-bold">
+                          <span>Helemaal mee oneens (1)</span>
+                          <span>Neutraal (3)</span>
+                          <span>Helemaal mee eens (5)</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : currentQuestion.questionType === "puzzle" ? (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {currentQuestion.options.map((option, idx) => {
+                        const styleInfo = [
+                          { bg: "bg-red-500 border-red-750", label: "🔴" },
+                          { bg: "bg-blue-500 border-blue-750", label: "🔵" },
+                          { bg: "bg-yellow-500 border-yellow-600 text-slate-950", label: "🟡" },
+                          { bg: "bg-green-500 border-green-755", label: "🟢" },
+                          { bg: "bg-purple-500 border-purple-750", label: "🟣" },
+                          { bg: "bg-orange-500 border-orange-755", label: "🟠" },
+                        ];
+                        const style = styleInfo[idx % styleInfo.length];
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center gap-4 px-6 py-5 rounded-2xl border text-xl font-bold ${style.bg} font-display text-white shadow-sm`}
+                          >
+                            <span className="text-2xl select-none">{style.label}</span>
+                            <span>{option}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="grid md:grid-cols-2 gap-4">
                       {currentQuestion.options.map((option, idx) => (
                         <div
                           key={idx}
-                          className={`flex items-center gap-4 px-6 py-5 rounded-2xl border text-xl font-bold ${optionColors[idx]} font-display`}
+                          className={`flex items-center gap-4 px-6 py-5 rounded-2xl border text-xl font-bold ${optionColors[idx % optionColors.length]} font-display`}
                         >
                           <ShapeIcon idx={idx} className="w-8 h-8 shrink-0 fill-white" />
                           <span>{option}</span>
@@ -1089,42 +1255,106 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   {/* Dynamic Stats Chart & options feedback */}
                   <div className={`grid md:grid-cols-2 gap-8 items-center ${activeTheme.cardBg} p-6 md:p-8 rounded-3xl relative z-10 shadow-xl`}>
                     <div className="space-y-4">
-                      {getStats().map((votes, idx) => {
-                        const isCorrectOption = currentQuestion.questionType === "wheel_spin"
-                          ? false
-                          : (currentQuestion.correctOptionIndices && currentQuestion.correctOptionIndices.length > 0
-                            ? currentQuestion.correctOptionIndices.includes(idx)
-                            : idx === currentQuestion.correctOptionIndex);
-                        const percentage = totalActives > 0 ? (votes / totalActives) * 100 : 0;
-                        return (
-                          <div key={idx} className="space-y-2">
-                             <div className="flex justify-between items-center text-sm font-semibold">
-                              <span className="flex items-center gap-2 text-slate-300">
-                                <span className={`flex items-center gap-1.5 ${isCorrectOption ? "text-emerald-400 font-extrabold" : "text-slate-400 font-medium"}`}>
-                                  <ShapeIcon idx={idx} className="w-5 h-5 shrink-0 inline-block fill-current" />
-                                  <span>{currentQuestion.options[idx]}</span>
-                                </span>
-                                {isCorrectOption && (
-                                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-0.5">
-                                    <Check className="w-3 h-3" /> Correct
+                      {currentQuestion.questionType === "puzzle" ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-purple-400 font-bold uppercase tracking-wider mb-2">Correcte Volgorde (Van boven naar beneden):</p>
+                          <div className="space-y-2">
+                            {currentQuestion.options.map((opt, idx) => {
+                              const optStyles = [
+                                "bg-red-500/10 border-red-500/30 text-red-200",
+                                "bg-blue-500/10 border-blue-500/30 text-blue-200",
+                                "bg-yellow-500/10 border-yellow-500/30 text-yellow-200",
+                                "bg-green-500/10 border-green-500/30 text-green-200",
+                                "bg-purple-500/10 border-purple-500/30 text-purple-200",
+                                "bg-orange-500/10 border-orange-500/30 text-orange-200",
+                              ];
+                              const style = optStyles[idx % optStyles.length];
+                              return (
+                                <div key={idx} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${style} font-bold text-sm`}>
+                                  <span className="w-6 h-6 rounded bg-slate-950 font-mono text-xs flex items-center justify-center text-slate-400 font-bold">
+                                    #{idx + 1}
                                   </span>
-                                )}
-                              </span>
-                              <span className="text-slate-400 font-mono">
-                                {votes} {currentQuestion.questionType === "wheel_spin" ? "keer geland" : `stem${votes === 1 ? "" : "men"}`} ({Math.round(percentage)}%)
-                              </span>
-                            </div>
-                            <div className="w-full bg-slate-900 border border-slate-800 h-6 rounded-lg overflow-hidden flex">
-                              <div
-                                className={`h-full transition-all duration-300 ${
-                                  currentQuestion.questionType === "wheel_spin" ? "bg-amber-500" : (isCorrectOption ? "bg-emerald-500" : "bg-indigo-950")
-                                }`}
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
+                                  <span>{opt}</span>
+                                  <Check className="w-4 h-4 text-emerald-400 ml-auto shrink-0" />
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ) : currentQuestion.questionType === "slider" ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-teal-400 font-bold uppercase tracking-wider mb-2">Stemverdeling Schaal (1 - 5):</p>
+                          <div className="space-y-3">
+                            {[1, 2, 3, 4, 5].map((num) => {
+                              const valIdx = num - 1;
+                              const isCorrectVal = valIdx === (currentQuestion.correctOptionIndex ?? 2);
+                              const votes = players.filter(p => p.currentAnswerIndex === valIdx).length;
+                              const totalVotes = players.filter(p => p.currentAnswerIndex !== null && p.currentAnswerIndex !== undefined).length;
+                              const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+                              return (
+                                <div key={num} className="space-y-1">
+                                  <div className="flex justify-between items-center text-xs font-bold">
+                                    <span className={`flex items-center gap-1.5 ${isCorrectVal ? "text-emerald-400 font-extrabold text-sm" : "text-slate-350"}`}>
+                                      <span>Getal {num}</span>
+                                      {isCorrectVal && (
+                                        <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase flex items-center gap-0.5">
+                                          <Check className="w-2.5 h-2.5" /> Correct
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="text-slate-500 font-mono">
+                                      {votes} stem{votes === 1 ? "" : "men"} ({Math.round(percentage)}%)
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-950/40 border border-slate-800 h-5 rounded-lg overflow-hidden flex">
+                                    <div
+                                      className={`h-full transition-all duration-300 ${isCorrectVal ? "bg-emerald-500" : "bg-indigo-950/60"}`}
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        getStats().map((votes, idx) => {
+                          const isCorrectOption = currentQuestion.questionType === "wheel_spin"
+                            ? false
+                            : (currentQuestion.correctOptionIndices && currentQuestion.correctOptionIndices.length > 0
+                              ? currentQuestion.correctOptionIndices.includes(idx)
+                              : idx === currentQuestion.correctOptionIndex);
+                          const percentage = totalActives > 0 ? (votes / totalActives) * 100 : 0;
+                          return (
+                            <div key={idx} className="space-y-2">
+                              <div className="flex justify-between items-center text-sm font-semibold">
+                                <span className="flex items-center gap-2 text-slate-300">
+                                  <span className={`flex items-center gap-1.5 ${isCorrectOption ? "text-emerald-400 font-extrabold" : "text-slate-400 font-medium"}`}>
+                                    <ShapeIcon idx={idx} className="w-5 h-5 shrink-0 inline-block fill-current" />
+                                    <span>{currentQuestion.options[idx]}</span>
+                                  </span>
+                                  {isCorrectOption && (
+                                    <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-0.5">
+                                      <Check className="w-3 h-3" /> Correct
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-slate-400 font-mono">
+                                  {votes} {currentQuestion.questionType === "wheel_spin" ? "keer geland" : `stem${votes === 1 ? "" : "men"}`} ({Math.round(percentage)}%)
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-900 border border-slate-800 h-6 rounded-lg overflow-hidden flex">
+                                <div
+                                  className={`h-full transition-all duration-300 ${
+                                    currentQuestion.questionType === "wheel_spin" ? "bg-amber-500" : (isCorrectOption ? "bg-emerald-500" : "bg-indigo-950")
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
 
                     {/* Stats summary display */}
@@ -1178,7 +1408,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                     ) : (
                       <div className="space-y-2.5">
                         {sortedPlayers.slice(0, 5).map((player, idx) => {
-                          const { displayName, avatarUrl } = parseNicknameAndAvatar(player.nickname || "");
+                          const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(player.nickname || "");
                           const medalColors = ["bg-amber-400 text-slate-950", "bg-slate-300 text-slate-950", "bg-amber-600 text-white"];
                           const isTop3 = idx < 3;
 
@@ -1190,19 +1420,26 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                               transition={{ delay: idx * 0.1 }}
                               className="flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl"
                             >
-                              <div className="flex items-center gap-4 overflow-hidden">
-                                <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${isTop3 ? medalColors[idx] : "bg-slate-800 text-slate-300"}`}>
+                              <div className="flex items-center gap-4 overflow-hidden flex-1 min-w-0">
+                                <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 ${isTop3 ? medalColors[idx] : "bg-slate-800 text-slate-300"}`}>
                                   {idx + 1}
                                 </span>
-                                <img src={avatarUrl} alt="avatar" className="w-10 h-10 -ml-2 rounded-full border-2 border-slate-700 bg-slate-800" />
-                                <span className="font-extrabold text-lg text-slate-100 truncate">{displayName}</span>
+                                <img src={avatarUrl} alt="avatar" className="w-10 h-10 -ml-2 rounded-full border-2 border-slate-700 bg-slate-800 shrink-0" />
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                  <span className="font-extrabold text-lg text-slate-100 truncate">{displayName}</span>
+                                  {isVerified && (
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-4 h-4 text-[10px] font-bold shrink-0 shadow-sm" title="Geverifieerde Speler">
+                                      ✓
+                                    </span>
+                                  )}
+                                </div>
                                 {player.streak > 1 && (
-                                  <span className="inline-flex items-center gap-0.5 bg-orange-600 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white animate-pulse">
+                                  <span className="inline-flex items-center gap-0.5 bg-orange-600 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white animate-pulse shrink-0">
                                     🔥 {player.streak} Streak
                                   </span>
                                 )}
                               </div>
-                              <span className="font-mono text-xl font-bold text-indigo-400">{player.score} pt</span>
+                              <span className="font-mono text-xl font-bold text-indigo-400 shrink-0 pl-2">{player.score} pt</span>
                             </motion.div>
                           );
                         })}
@@ -1238,12 +1475,20 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                   exit={{ opacity: 0 }}
                   className="space-y-8 py-6 text-center"
                 >
-                  <div className="space-y-2">
-                    <div className="inline-flex p-3 bg-amber-500/20 text-amber-400 rounded-3xl animate-bounce mb-2">
-                      <Award className="w-12 h-12" />
-                    </div>
-                    <h1 className="text-4xl md:text-5xl font-extrabold font-display text-white">Spel Afgelopen!</h1>
-                    <p className="text-slate-400 max-w-md mx-auto">Bekijk hieronder de eindwinnaars of open het gedetailleerd overzicht.</p>
+                  <div className="space-y-1">
+                    {activeEndTab !== "podium" ? (
+                      <>
+                        <div className="inline-flex p-3 bg-amber-500/20 text-amber-400 rounded-3xl animate-bounce mb-2">
+                          <Award className="w-12 h-12" />
+                        </div>
+                        <h1 className="text-4xl md:text-5xl font-extrabold font-display text-white">Spel Afgelopen!</h1>
+                        <p className="text-slate-400 max-w-md mx-auto text-sm">Bekijk hieronder de eindwinnaars of open het gedetailleerd overzicht.</p>
+                      </>
+                    ) : (
+                      <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-display text-white flex items-center justify-center gap-2">
+                        🏆 EINDSTAND PODIUM 🏆
+                      </h1>
+                    )}
                   </div>
 
                   {/* Tab switches for the host */}
@@ -1253,7 +1498,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                       className={`px-6 py-2.5 rounded-full font-bold text-sm transition cursor-pointer flex items-center gap-2 ${
                         activeEndTab === "podium"
                           ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
-                          : "bg-slate-800 text-slate-405 hover:bg-slate-750 hover:text-white border border-transparent"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
                       }`}
                     >
                       🏆 Podium
@@ -1263,7 +1508,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                       className={`px-6 py-2.5 rounded-full font-bold text-sm transition cursor-pointer flex items-center gap-2 ${
                         activeEndTab === "analysis"
                           ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
-                          : "bg-slate-800 text-slate-405 hover:bg-slate-755 hover:text-white border border-transparent"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
                       }`}
                     >
                       📊 Gedetailleerd Overzicht
@@ -1279,45 +1524,50 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         <div className="w-48 h-48 rounded-full bg-amber-800/30" />
                       </div>
 
-                      <div className="flex justify-center items-end gap-4 sm:gap-6 md:gap-8 max-w-3xl mx-auto pt-12 pb-10 h-[380px] border-b border-slate-800/60">
+                      <div className="flex justify-center items-end gap-2 sm:gap-6 md:gap-8 max-w-3xl mx-auto pt-4 pb-4 h-[280px] sm:h-[350px] md:h-[380px] border-b border-slate-800/60">
                         {/* 2nd Place Slot */}
                         {(() => {
                           const hasRevealed = (session?.currentQuestionIndex ?? 0) >= 4;
                           if (hasRevealed && sortedPlayers[1]) {
-                            const { displayName: n1, avatarUrl: a1 } = parseNicknameAndAvatar(sortedPlayers[1].nickname || "");
+                            const { displayName: n1, avatarUrl: a1, isVerified: v1 } = parseNicknameAndAvatar(sortedPlayers[1].nickname || "");
                             return (
                               <motion.div
                                 initial={{ y: 90, opacity: 0, scale: 0.9 }}
                                 animate={{ y: 0, opacity: 1, scale: 1 }}
                                 transition={{ type: "spring", stiffness: 80, damping: 15 }}
-                                className="flex flex-col items-center w-28 sm:w-36 md:w-40 z-10 group"
+                                className="flex flex-col items-center w-20 sm:w-32 md:w-40 z-10 group"
                               >
-                                <div className="relative mb-2">
+                                <div className="relative mb-1.5">
                                   <div className="absolute inset-0 bg-slate-300/20 rounded-full blur-md group-hover:blur-lg transition-all scale-110" />
-                                  <img src={a1} alt="avatar" className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-950 border-4 border-slate-350 rounded-full shadow-xl relative z-10" />
-                                  <span className="absolute -bottom-1 -right-1 bg-slate-200 text-slate-950 text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-900 z-20 font-display font-bold">2</span>
+                                  <img src={a1} alt="avatar" className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-slate-950 border-2 sm:border-4 border-slate-300 rounded-full shadow-xl relative z-10 object-cover" />
+                                  <span className="absolute -bottom-1 -right-1 bg-slate-200 text-slate-950 text-[10px] font-black w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display font-bold">2</span>
                                 </div>
-                                <span className="text-slate-100 font-display font-extrabold text-sm sm:text-base md:text-lg mb-0.5 max-w-full truncate px-1 text-center" title={n1}>
+                                <span className="text-slate-100 font-display font-extrabold text-[11px] sm:text-sm md:text-lg mb-0.5 max-w-full truncate px-1 text-center flex items-center justify-center gap-1" title={n1}>
                                   {n1}
+                                  {v1 && (
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                      ✓
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="text-slate-400 font-mono text-xs font-bold mb-2.5">{sortedPlayers[1].score ?? 0} pt</span>
-                                <div className="w-full bg-linear-to-b from-slate-400/90 to-slate-600/90 border-t border-slate-300 h-28 sm:h-36 md:h-40 rounded-t-3xl flex flex-col items-center justify-center shadow-2xl relative overflow-hidden group-hover:from-slate-350/95 group-hover:to-slate-550/95 transition-all">
+                                <span className="text-slate-400 font-mono text-[9px] sm:text-xs font-bold mb-1.5">{sortedPlayers[1].score ?? 0} pt</span>
+                                <div className="w-full bg-linear-to-b from-slate-400/90 to-slate-600/90 border-t border-slate-300 h-20 sm:h-28 md:h-36 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center shadow-2xl relative overflow-hidden group-hover:from-slate-300/95 group-hover:to-slate-500/95 transition-all">
                                   <div className="absolute top-0 right-0 left-0 h-[2px] bg-white/20" />
-                                  <span className="text-4xl sm:text-5xl md:text-6xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-md">2</span>
-                                  <span className="text-[10px] sm:text-xs text-slate-200 uppercase font-black tracking-widest mt-1">Zilver</span>
+                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-md">2</span>
+                                  <span className="text-[8px] sm:text-[10px] text-slate-200 uppercase font-black tracking-widest mt-1">Zilver</span>
                                 </div>
                               </motion.div>
                             );
                           } else {
                             return (
-                              <div className="flex flex-col items-center w-28 sm:w-36 md:w-40 opacity-40 select-none">
-                                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-950 border-4 border-dashed border-slate-800 rounded-full mb-2 flex items-center justify-center text-slate-600 text-xl shadow-inner animate-pulse">
+                              <div className="flex flex-col items-center w-20 sm:w-32 md:w-40 opacity-40 select-none">
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-base md:text-xl shadow-inner animate-pulse">
                                   🔒
                                 </div>
-                                <span className="text-slate-600 font-display font-bold text-sm mb-1">???</span>
-                                <span className="text-slate-700 font-mono text-xs font-semibold mb-2.5">0 pt</span>
-                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-28 sm:h-36 md:h-40 rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-4xl text-slate-850 font-black font-display">2</span>
+                                <span className="text-slate-600 font-display font-bold text-xs sm:text-sm mb-0.5">???</span>
+                                <span className="text-slate-705 font-mono text-[10px] sm:text-xs font-semibold mb-1.5">0 pt</span>
+                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-20 sm:h-28 md:h-36 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
+                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-850 font-black font-display">2</span>
                                 </div>
                               </div>
                             );
@@ -1328,42 +1578,47 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         {(() => {
                           const hasRevealed = (session?.currentQuestionIndex ?? 0) >= 5;
                           if (hasRevealed && sortedPlayers[0]) {
-                            const { displayName: n0, avatarUrl: a0 } = parseNicknameAndAvatar(sortedPlayers[0].nickname || "");
+                            const { displayName: n0, avatarUrl: a0, isVerified: v0 } = parseNicknameAndAvatar(sortedPlayers[0].nickname || "");
                             return (
                               <motion.div
                                 initial={{ y: 110, opacity: 0, scale: 0.85 }}
                                 animate={{ y: 0, opacity: 1, scale: 1 }}
                                 transition={{ type: "spring", stiffness: 60, damping: 12 }}
-                                className="flex flex-col items-center w-36 sm:w-48 md:w-52 z-30 group"
+                                className="flex flex-col items-center w-26 sm:w-38 md:w-48 z-30 group"
                               >
-                                <div className="relative mb-2">
+                                <div className="relative mb-1.5">
                                   <div className="absolute inset-0 bg-yellow-500/30 rounded-full blur-xl animate-pulse scale-125 z-0" />
-                                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20">
-                                    <Trophy className="w-8 h-8 text-amber-300 animate-bounce -mb-1" />
+                                  <div className="absolute -top-5 sm:-top-7 left-1/2 -translate-x-1/2 z-20">
+                                    <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300 animate-bounce -mb-1" />
                                   </div>
-                                  <img src={a0} alt="avatar" className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-950 border-4 border-amber-400 rounded-full shadow-2xl relative z-10" />
-                                  <span className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 text-xs font-extrabold w-7 h-7 rounded-full flex items-center justify-center border-2 border-slate-900 z-20 font-display animate-pulse shadow-md">1</span>
+                                  <img src={a0} alt="avatar" className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-slate-950 border-2 sm:border-4 border-amber-400 rounded-full shadow-2xl relative z-10 object-cover" />
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 text-[11px] sm:text-xs font-extrabold w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display animate-pulse shadow-md">1</span>
                                 </div>
-                                <span className="text-amber-300 font-display font-black text-base sm:text-lg md:text-xl mb-0.5 max-w-full truncate px-1 text-center drop-shadow-md flex items-center justify-center gap-1" title={n0}>
+                                <span className="text-amber-300 font-display font-black text-xs sm:text-base md:text-xl mb-0.5 max-w-full truncate px-1 text-center drop-shadow-md flex items-center justify-center gap-1.5" title={n0}>
                                   👑 {n0}
+                                  {v0 && (
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs">
+                                      ✓
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="text-amber-200 font-mono text-sm font-black mb-3 text-glow-yellow">{sortedPlayers[0].score ?? 0} pt</span>
-                                <div className="w-full bg-linear-to-b from-amber-400 to-amber-650 border-t-2 border-amber-300 h-36 sm:h-48 rounded-t-3xl flex flex-col items-center justify-center shadow-3xl relative overflow-hidden group-hover:from-amber-350 group-hover:to-amber-550 transition-all border border-amber-500/30">
-                                  <span className="text-5xl sm:text-6xl md:text-7xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-lg">1</span>
-                                  <span className="text-[10px] sm:text-xs text-slate-950 uppercase font-black tracking-widest mt-1">Goud</span>
+                                <span className="text-amber-200 font-mono text-[10px] sm:text-sm font-black mb-2 text-glow-yellow">{sortedPlayers[0].score ?? 0} pt</span>
+                                <div className="w-full bg-linear-to-b from-amber-400 to-amber-650 border-t-2 border-amber-300 h-28 sm:h-38 md:h-46 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center shadow-3xl relative overflow-hidden group-hover:from-amber-300 group-hover:to-amber-500 transition-all border border-amber-500/30">
+                                  <span className="text-3.5xl sm:text-5xl md:text-6xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-lg">1</span>
+                                  <span className="text-[8px] sm:text-[10px] text-slate-950 uppercase font-black tracking-widest mt-1">Goud</span>
                                 </div>
                               </motion.div>
                             );
                           } else {
                             return (
-                              <div className="flex flex-col items-center w-36 sm:w-48 md:w-52 opacity-40 select-none z-20">
-                                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-950 border-4 border-dashed border-slate-800 rounded-full mb-2 flex items-center justify-center text-slate-600 text-2xl shadow-inner animate-pulse">
+                              <div className="flex flex-col items-center w-26 sm:w-38 md:w-48 opacity-40 select-none z-20">
+                                <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-lg sm:text-2xl shadow-inner animate-pulse">
                                   🔒
                                 </div>
-                                <span className="text-slate-600 font-display font-bold text-base mb-1">???</span>
-                                <span className="text-slate-705 font-mono text-sm font-semibold mb-3">0 pt</span>
-                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-36 sm:h-48 rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-4xl text-slate-850 font-black font-display">1</span>
+                                <span className="text-slate-600 font-display font-bold text-xs sm:text-base mb-0.5">???</span>
+                                <span className="text-slate-705 font-mono text-[10px] sm:text-sm font-semibold mb-2">0 pt</span>
+                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-28 sm:h-38 md:h-46 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
+                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-850 font-black font-display">1</span>
                                 </div>
                               </div>
                             );
@@ -1374,39 +1629,44 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         {(() => {
                           const hasRevealed = (session?.currentQuestionIndex ?? 0) >= 3;
                           if (hasRevealed && sortedPlayers[2]) {
-                            const { displayName: n2, avatarUrl: a2 } = parseNicknameAndAvatar(sortedPlayers[2].nickname || "");
+                            const { displayName: n2, avatarUrl: a2, isVerified: v2 } = parseNicknameAndAvatar(sortedPlayers[2].nickname || "");
                             return (
                               <motion.div
                                 initial={{ y: 70, opacity: 0, scale: 0.9 }}
                                 animate={{ y: 0, opacity: 1, scale: 1 }}
                                 transition={{ type: "spring", stiffness: 100, damping: 16 }}
-                                className="flex flex-col items-center w-24 sm:w-32 md:w-36 group"
+                                className="flex flex-col items-center w-18 sm:w-28 md:w-36 group"
                               >
-                                <div className="relative mb-2">
+                                <div className="relative mb-1.5">
                                   <div className="absolute inset-0 bg-amber-700/20 rounded-full blur-md group-hover:blur-lg transition-all scale-110" />
-                                  <img src={a2} alt="avatar" className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-950 border-4 border-amber-800 rounded-full shadow-lg relative z-10" />
-                                  <span className="absolute -bottom-1 -right-1 bg-amber-700 text-white text-[9px] font-black w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-900 z-20 font-display font-bold">3</span>
+                                  <img src={a2} alt="avatar" className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-slate-950 border-2 sm:border-4 border-amber-800 rounded-full shadow-lg relative z-10 object-cover" />
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-700 text-white text-[8px] sm:text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display font-bold">3</span>
                                 </div>
-                                <span className="text-amber-650 font-display font-extrabold text-xs sm:text-sm md:text-base mb-0.5 max-w-full truncate px-1 text-center" title={n2}>
+                                <span className="text-amber-655 font-display font-extrabold text-[10px] sm:text-xs md:text-base mb-0.5 max-w-full truncate px-1 text-center flex items-center justify-center gap-1" title={n2}>
                                   {n2}
+                                  {v2 && (
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                      ✓
+                                    </span>
+                                  )}
                                 </span>
-                                <span className="text-slate-400 font-mono text-xs font-bold mb-2">{sortedPlayers[2].score ?? 0} pt</span>
-                                <div className="w-full bg-linear-to-b from-amber-700 to-amber-900 border-t border-amber-655 h-24 sm:h-28 md:h-32 rounded-t-3xl flex flex-col items-center justify-center shadow-xl relative overflow-hidden group-hover:from-amber-650 group-hover:to-amber-850 transition-all">
-                                  <span className="text-3xl sm:text-4xl md:text-5xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-md">3</span>
-                                  <span className="text-[9px] sm:text-[10px] text-amber-200 uppercase font-black tracking-widest mt-1">Brons</span>
+                                <span className="text-slate-400 font-mono text-[9px] sm:text-xs font-bold mb-1.5">{sortedPlayers[2].score ?? 0} pt</span>
+                                <div className="w-full bg-linear-to-b from-amber-700 to-amber-900 border-t border-amber-655 h-16 sm:h-22 md:h-28 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center shadow-xl relative overflow-hidden group-hover:from-amber-650 group-hover:to-amber-850 transition-all">
+                                  <span className="text-2xl sm:text-3xl md:text-4xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-md">3</span>
+                                  <span className="text-[8px] sm:text-[9px] text-amber-200 uppercase font-black tracking-widest mt-1">Brons</span>
                                 </div>
                               </motion.div>
                             );
                           } else {
                             return (
-                              <div className="flex flex-col items-center w-24 sm:w-32 md:w-36 opacity-40 select-none">
-                                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-950 border-4 border-dashed border-slate-800 rounded-full mb-2 flex items-center justify-center text-slate-600 text-lg shadow-inner animate-pulse">
+                              <div className="flex flex-col items-center w-18 sm:w-28 md:w-36 opacity-40 select-none">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-sm sm:text-lg shadow-inner animate-pulse">
                                   🔒
                                 </div>
-                                <span className="text-slate-600 font-display font-bold text-sm mb-1">???</span>
-                                <span className="text-slate-705 font-mono text-xs font-semibold mb-2">0 pt</span>
-                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-24 sm:h-28 md:h-32 rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-3xl text-slate-850 font-bold font-display">3</span>
+                                <span className="text-slate-600 font-display font-bold text-[10px] sm:text-sm mb-0.5">???</span>
+                                <span className="text-slate-705 font-mono text-[9px] sm:text-xs font-semibold mb-1.5">0 pt</span>
+                                <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-16 sm:h-22 md:h-28 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
+                                  <span className="text-xl sm:text-3xl md:text-4xl text-slate-850 font-bold font-display">3</span>
                                 </div>
                               </div>
                             );
@@ -1420,7 +1680,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         {sortedPlayers[3] && (() => {
                           const hasRevealed = (session?.currentQuestionIndex ?? 0) >= 2;
                           if (hasRevealed) {
-                            const { displayName: n3, avatarUrl: a3 } = parseNicknameAndAvatar(sortedPlayers[3].nickname || "");
+                            const { displayName: n3, avatarUrl: a3, isVerified: v3 } = parseNicknameAndAvatar(sortedPlayers[3].nickname || "");
                             return (
                               <motion.div
                                 initial={{ x: -30, opacity: 0, scale: 0.95 }}
@@ -1435,9 +1695,16 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                   <span className="absolute -top-1 -left-1 bg-indigo-650 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">4</span>
                                 </div>
                                 <div className="min-w-0 text-left relative z-10">
-                                  <p className="font-extrabold text-slate-100 text-sm sm:text-base truncate" title={n3}>{n3}</p>
+                                  <div className="flex items-center gap-1.5 max-w-full">
+                                    <p className="font-extrabold text-slate-100 text-sm sm:text-base truncate" title={n3}>{n3}</p>
+                                    {v3 && (
+                                      <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                        ✓
+                                      </span>
+                                    )}
+                                  </div>
                                   <p className="font-bold text-[10px] text-indigo-400 uppercase tracking-widest font-mono">4e Finalist</p>
-                                  <p className="font-bold text-xs text-slate-350 font-mono mt-0.5">{sortedPlayers[3].score} pt</p>
+                                  <p className="font-bold text-xs text-slate-400 font-mono mt-0.5">{sortedPlayers[3].score} pt</p>
                                 </div>
                               </motion.div>
                             );
@@ -1456,7 +1723,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         {sortedPlayers[4] && (() => {
                           const hasRevealed = (session?.currentQuestionIndex ?? 0) >= 1;
                           if (hasRevealed) {
-                            const { displayName: n4, avatarUrl: a4 } = parseNicknameAndAvatar(sortedPlayers[4].nickname || "");
+                            const { displayName: n4, avatarUrl: a4, isVerified: v4 } = parseNicknameAndAvatar(sortedPlayers[4].nickname || "");
                             return (
                               <motion.div
                                 initial={{ x: 30, opacity: 0, scale: 0.95 }}
@@ -1471,9 +1738,16 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                   <span className="absolute -top-1 -left-1 bg-indigo-650 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">5</span>
                                 </div>
                                 <div className="min-w-0 text-left relative z-10">
-                                  <p className="font-extrabold text-slate-100 text-sm sm:text-base truncate" title={n4}>{n4}</p>
+                                  <div className="flex items-center gap-1.5 max-w-full">
+                                    <p className="font-extrabold text-slate-100 text-sm sm:text-base truncate" title={n4}>{n4}</p>
+                                    {v4 && (
+                                      <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                        ✓
+                                      </span>
+                                    )}
+                                  </div>
                                   <p className="font-bold text-[10px] text-indigo-400 uppercase tracking-widest font-mono">5e Finalist</p>
-                                  <p className="font-bold text-xs text-slate-350 font-mono mt-0.5">{sortedPlayers[4].score} pt</p>
+                                  <p className="font-bold text-xs text-slate-400 font-mono mt-0.5">{sortedPlayers[4].score} pt</p>
                                 </div>
                               </motion.div>
                             );
@@ -1548,7 +1822,7 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {sortedPlayers.map((player, idx) => {
-                            const { displayName, avatarUrl } = parseNicknameAndAvatar(player.nickname || "");
+                            const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(player.nickname || "");
                             return (
                               <div key={player.id || idx} className="flex items-center justify-between bg-slate-850 p-4 rounded-xl border border-slate-800/60 hover:border-slate-800 transition">
                                 <div className="flex items-center gap-3">
@@ -1557,7 +1831,14 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                   </div>
                                   <img src={avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-slate-700" />
                                   <div>
-                                    <h4 className="font-extrabold text-white text-sm">{displayName}</h4>
+                                    <div className="flex items-center gap-1.5">
+                                      <h4 className="font-extrabold text-white text-sm">{displayName}</h4>
+                                      {isVerified && (
+                                        <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-xs text-slate-400">Plaats #{idx + 1}</p>
                                   </div>
                                 </div>
@@ -1652,11 +1933,18 @@ export default function GameHost({ quiz, onExit }: GameHostProps) {
                                             ? "bg-emerald-950/20 border-emerald-900/60 text-emerald-250"
                                             : "bg-red-950/20 border-red-900/60 text-red-250"
                                       }`}>
-                                        <div className="flex items-center gap-2 truncate">
-                                          <img src={cleanNickname.avatarUrl} alt="" className="w-5 h-5 rounded-full border border-slate-800" />
-                                          <span className="font-bold truncate" title={cleanNickname.displayName}>
-                                            {cleanNickname.displayName}
-                                          </span>
+                                        <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                          <img src={cleanNickname.avatarUrl} alt="" className="w-5 h-5 rounded-full border border-slate-800 shrink-0" />
+                                          <div className="flex items-center gap-1.5 truncate">
+                                            <span className="font-bold truncate" title={cleanNickname.displayName}>
+                                              {cleanNickname.displayName}
+                                            </span>
+                                            {cleanNickname.isVerified && (
+                                              <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                                ✓
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                         <div className="font-mono flex items-center gap-1.5 text-[11px] font-bold">
                                           {pAnsweredIdx === null ? (

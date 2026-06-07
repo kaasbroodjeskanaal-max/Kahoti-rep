@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { ArrowLeft, Loader2, Play, RefreshCw, Sparkles, Sliders, Palette } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
-import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl } from "../avatarUtils";
+import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl, parseQuizTitle } from "../avatarUtils";
 
 // Fun Dutch character personality tags to make customization incredibly delightful!
 export const BASE_DESCRIPTIONS: Record<string, string> = {
@@ -127,29 +127,46 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
     triggerReaction();
   };
 
+  const [playerUid, setPlayerUid] = useState<string>("");
+  const [isMarko, setIsMarko] = useState(false);
+
+  // Load player ID and check if they are markohoksen@gmail.com on mount
+  React.useEffect(() => {
+    async function initUser() {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const userEmail = authSession?.user?.email?.toLowerCase() || "";
+      if (userEmail === "markohoksen@gmail.com") {
+        setIsMarko(true);
+      }
+      
+      if (authSession?.user?.id) {
+        setPlayerUid(authSession.user.id);
+      } else {
+        let localId = localStorage.getItem("quiz_player_uuid");
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!localId || !uuidRegex.test(localId)) {
+          localId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
+          localStorage.setItem("quiz_player_uuid", localId);
+        }
+        setPlayerUid(localId);
+      }
+    }
+    initUser();
+  }, []);
+
   // Synchronise player choices in real-time with the host's screen while they are designing
   React.useEffect(() => {
-    if (step !== "nickname" || !targetSessionId) return;
-
-    // Get or generate player UUID
-    let playerUid = "";
-    let localId = localStorage.getItem("quiz_player_uuid");
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (localId && uuidRegex.test(localId)) {
-      playerUid = localId;
-    } else {
-      playerUid = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === "x" ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-          });
-      localStorage.setItem("quiz_player_uuid", playerUid);
-    }
+    if (step !== "nickname" || !targetSessionId || !playerUid) return;
 
     const currentName = nickname.trim() || "Kiezen...";
-    const combinedNickname = `${currentName}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
+    const nameWithTag = isMarko ? `${currentName}__verified__` : currentName;
+    const combinedNickname = `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
 
     const timer = setTimeout(async () => {
       try {
@@ -172,7 +189,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
     }, 400); // 400ms debounce to prevent spamming database on rapid typing/clicking
 
     return () => clearTimeout(timer);
-  }, [step, targetSessionId, nickname, baseIdx, hatIdx, accIdx, gradIdx]);
+  }, [step, targetSessionId, nickname, baseIdx, hatIdx, accIdx, gradIdx, playerUid, isMarko]);
 
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,6 +244,25 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
         return;
       }
 
+      const { isLocked } = parseQuizTitle(sessionData.quiz_title || "");
+      if (isLocked) {
+        setError("De host heeft deze lobby gesloten/vergrendeld. Nieuwe spelers kunnen niet meer meedoen.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Limit check to prevent bot flooding (max 60 players per lobby)
+      const { data: currentPlayers, error: countErr } = await supabase
+        .from("players")
+        .select("id")
+        .eq("session_id", sessionData.id);
+
+      if (!countErr && currentPlayers && currentPlayers.length >= 60) {
+        setError("Deze lobby is vol! Er zijn al 60 spelers aangemeld. Om geautomatiseerde bots en databaseoverbelasting te voorkomen, is de capaciteit gelimiteerd.");
+        setIsLoading(false);
+        return;
+      }
+
       setTargetSessionId(sessionData.id);
       setStep("nickname");
     } catch (err: any) {
@@ -246,29 +282,51 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
     setError("");
 
     try {
-      // Get Player UID dynamically from session, falling back to local ID if needed
-      let playerUid = "";
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (authSession?.user?.id) {
-        playerUid = authSession.user.id;
-      } else {
-        let localId = localStorage.getItem("quiz_player_uuid");
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!localId || !uuidRegex.test(localId)) {
-          localId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-            ? crypto.randomUUID()
-            : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-                const r = (Math.random() * 16) | 0;
-                const v = c === "x" ? r : (r & 0x3) | 0x8;
-                return v.toString(16);
-              });
-          localStorage.setItem("quiz_player_uuid", localId);
-        }
-        playerUid = localId;
+      if (!playerUid) {
+        throw new Error("Spelers-ID wordt nog geladen. Probeer het over een seconde opnieuw.");
+      }
+
+      // Rate limit joins per device: maximum 1 join action per 5 seconds
+      const now = Date.now();
+      const lastJoin = localStorage.getItem("last_quiz_join_time");
+      if (lastJoin && now - Number(lastJoin) < 5050) {
+        const secondsLeft = Math.ceil((5050 - (now - Number(lastJoin))) / 1000);
+        throw new Error(`Niet zo snel! Je kunt maximaal één keer per 5 seconden een lobby betreden. Wacht nog ${secondsLeft} seconden.`);
       }
 
       // Create/Upsert player record in players table
-      const combinedNickname = `${nickname.trim()}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
+      const currentName = nickname.trim();
+      const nameWithTag = isMarko ? `${currentName}__verified__` : currentName;
+      const combinedNickname = `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
+
+      // Clean up previous double entries with the same name in this session to prevent doubles
+      const { data: existingSameNamePlayers } = await supabase
+        .from("players")
+        .select("id, nickname")
+        .eq("session_id", targetSessionId);
+
+      // Verify overall capacity in case someone bypassed code check
+      if (existingSameNamePlayers && existingSameNamePlayers.length >= 60) {
+        throw new Error("Lobby is vol! Maximaal 60 spelers per sessie toegestaan.");
+      }
+
+      if (existingSameNamePlayers && existingSameNamePlayers.length > 0) {
+        const toDeleteIds: string[] = [];
+        for (const p of existingSameNamePlayers) {
+          const parts = (p.nickname || "").split(":::");
+          const namePart = parts[0] ? parts[0].replace("__verified__", "") : "";
+          if (namePart.toLowerCase() === currentName.toLowerCase() && p.id !== playerUid) {
+            toDeleteIds.push(p.id);
+          }
+        }
+        if (toDeleteIds.length > 0) {
+          await supabase
+            .from("players")
+            .delete()
+            .in("id", toDeleteIds);
+        }
+      }
+
       const { error: insertError } = await supabase
         .from("players")
         .upsert({
@@ -287,6 +345,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
         throw new Error(insertError.message);
       }
 
+      localStorage.setItem("last_quiz_join_time", String(Date.now()));
       onJoined(targetSessionId, combinedNickname);
     } catch (err: any) {
       console.error(err);
@@ -349,7 +408,7 @@ export default function QuizJoin({ onJoined, onBack }: QuizJoinProps) {
               <button
                 type="button"
                 onClick={onBack}
-                className="w-1/3 flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-350 py-4 rounded-xl font-semibold transition cursor-pointer"
+                className="w-1/3 flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-400 py-4 rounded-xl font-semibold transition cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" /> Terug
               </button>

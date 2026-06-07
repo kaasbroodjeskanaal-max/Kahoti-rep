@@ -7,7 +7,7 @@ export interface Question {
   options: string[];  // 2 to 6 answer choices
   correctOptionIndex: number; // 0 to 5
   correctOptionIndices?: number[]; // indices of correct answers
-  questionType?: "multiple_choice" | "true_false" | "wheel_spin";
+  questionType?: "multiple_choice" | "true_false" | "wheel_spin" | "puzzle" | "slider";
   theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
   lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
 }
@@ -50,6 +50,23 @@ export interface Player {
 
 export const checkIsCorrect = (playerAnswerIndex: number | null, question: Question): boolean => {
   if (playerAnswerIndex === null) return false;
+  
+  if (question.questionType === "puzzle") {
+    // Puzzle checks if the sequence matched. correctOptionIndices is e.g. [0, 1, 2, 3]
+    const correctSeq = question.correctOptionIndices || [0, 1, 2, 3];
+    let correctVal = 0;
+    for (let i = 0; i < correctSeq.length; i++) {
+      correctVal = correctVal * 10 + correctSeq[i];
+    }
+    return playerAnswerIndex === correctVal;
+  }
+  
+  if (question.questionType === "slider") {
+    // Slider check against the nominated target index (0-based)
+    const correctIdx = question.correctOptionIndex ?? 2;
+    return playerAnswerIndex === correctIdx;
+  }
+
   const correctIndices = question.correctOptionIndices || [question.correctOptionIndex ?? 0];
   if (correctIndices.length > 1) {
     // Multi-select comparison via bitmask
@@ -99,7 +116,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         bgClasses: "bg-purple-950 bg-gradient-to-br from-purple-950 via-slate-950 to-orange-950 text-orange-200 transition-all duration-700 relative overflow-hidden",
         cardBg: "bg-slate-900/90 border border-purple-900/50 shadow-2xl",
         textColor: "text-orange-100 dark:text-orange-50",
-        accentColor: "bg-orange-600 border-orange-750",
+        accentColor: "bg-orange-600 border-orange-700",
         emoji: "🎃",
         name: "Halloween",
       };
@@ -117,7 +134,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         bgClasses: "bg-slate-950 bg-radial-at-t from-fuchsia-950 via-slate-950 to-slate-950 text-fuchsia-300 transition-all duration-700 relative overflow-hidden",
         cardBg: "bg-slate-900/90 border border-fuchsia-900/50 shadow-2xl",
         textColor: "text-fuchsia-100",
-        accentColor: "bg-fuchsia-600 border-fuchsia-750",
+        accentColor: "bg-fuchsia-600 border-fuchsia-700",
         emoji: "⚡",
         name: "Neon Retro",
       };
@@ -127,7 +144,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         bgClasses: "bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-all duration-500",
         cardBg: "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm",
         textColor: "text-slate-800 dark:text-slate-100",
-        accentColor: "bg-indigo-600 border-indigo-750",
+        accentColor: "bg-indigo-600 border-indigo-700",
         emoji: "🎉",
         name: "Standaard",
       };

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="kahoti-grad-mask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <!-- Full square background for maskable compatibility -->
+  <rect width="512" height="512" fill="#020617" />
+  <circle cx="256" cy="256" r="210" fill="url(#kahoti-grad-mask)" opacity="0.12" />
+  <!-- Styled K representation -->
+  <rect x="160" y="130" width="55" height="252" rx="14" fill="#10b981" />
+  <path d="M215 256 L325 146 C335 136 351 136 361 146 C371 156 371 172 361 182 L266 277 Z" fill="#06b6d4" />
+  <path d="M215 256 L325 366 C335 376 335 392 325 402 C315 412 299 412 289 402 L194 307 Z" fill="#8b5cf6" />
+  <path d="M360 250 Q385 250 385 225 Q385 250 410 250 Q385 250 385 275 Q385 250 360 250 Z" fill="#fbbf24" />
+</svg>

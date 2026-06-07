@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="kahoti-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <!-- Beautiful Rounded Dark Slate Background -->
+  <rect width="512" height="512" rx="112" fill="#020617" />
+  <!-- Radiant background orb -->
+  <circle cx="256" cy="256" r="190" fill="url(#kahoti-grad)" opacity="0.15" />
+  <!-- Left column bar (Emerald quiz shape) -->
+  <rect x="150" y="120" width="60" height="272" rx="16" fill="#10b981" />
+  <!-- Top Diagonal branch (Teal quiz shape) -->
+  <path d="M210 256 L330 136 C340 126 356 126 366 136 C376 146 376 162 366 172 L266 272 Z" fill="#06b6d4" />
+  <!-- Bottom Diagonal branch (Purple quiz shape) -->
+  <path d="M210 256 L334 380 C344 390 344 406 334 416 C324 426 308 426 298 416 L178 296" fill="#8b5cf6" opacity="0.9" />
+  <!-- Play Button Accent Sparkle in center -->
+  <polygon points="210,256 178,296 150,256" fill="#fbbf24" />
+  <!-- Small Star Sparkle -->
+  <path d="M370 240 Q400 240 400 210 Q400 240 430 240 Q400 240 400 270 Q400 240 370 240 Z" fill="#fbbf24" />
+</svg>

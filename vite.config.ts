@@ -11,6 +11,16 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    // Obfuscation, security & hardening optimizations
+    build: {
+      // 1. Strictly disable source map files, completely blocking reverse-engineering from browser inspect tools.
+      sourcemap: false,
+      // 2. Enable aggressive minification config to mangle, shrink, compress, and flatten variables, classes, and helper states.
+      minify: 'esbuild' as const,
+      cssMinify: true,
+      // 3. Clear warnings and guarantee a monolithic compiler asset path
+      chunkSizeWarningLimit: 1500,
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
