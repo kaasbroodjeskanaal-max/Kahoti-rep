@@ -183,30 +183,58 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-indigo-100 font-sans transition-colors duration-250 relative">
-      {/* Floating Header Toggles */}
-      <div className="absolute top-6 right-6 z-50 flex items-center gap-2">
-        {/* Language Selection Button */}
-        <button
-          onClick={() => {
-            const next = lang === "nl" ? "en" : "nl";
-            setLang(next);
-            localStorage.setItem("kahoti_lang", next);
-          }}
-          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-black text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5"
-          title={lang === "nl" ? "Switch to English" : "Schakel naar Nederlands"}
-        >
-          <span>{lang === "nl" ? "🇳🇱 NL" : "🇬🇧 EN"}</span>
-        </button>
+      {/* Top Navigation Bar with High Visibility Language Selectors */}
+      <header className="w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-base shadow-sm">
+            K
+          </div>
+          <span className="font-extrabold font-display text-indigo-600 dark:text-indigo-400 text-lg tracking-tight">
+            Kahoti
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {/* Super Prominent Language Switcher */}
+          <div className="bg-slate-100 dark:bg-slate-950 p-1 rounded-xl flex items-center gap-1 border border-slate-200 dark:border-slate-800/80 shadow-xs relative">
+            <button
+              onClick={() => {
+                setLang("nl");
+                localStorage.setItem("kahoti_lang", "nl");
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                lang === "nl"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-800/50"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+            >
+              <span className="text-sm">🇳🇱</span> NL
+            </button>
+            <button
+              onClick={() => {
+                setLang("en");
+                localStorage.setItem("kahoti_lang", "en");
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                lang === "en"
+                  ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs ring-1 ring-slate-200 dark:ring-slate-800/50"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+              }`}
+            >
+              <span className="text-sm">🇬🇧</span> EN
+            </button>
+          </div>
 
-        {/* Dark Mode Toggle */}
-        <button
-          onClick={() => setIsDark(!isDark)}
-          className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center"
-          title={isDark ? t.lightMode : t.darkMode}
-        >
-          {isDark ? <Sun className="w-4 h-4 text-amber-500 animate-[spin_5s_linear_infinite]" /> : <Moon className="w-4 h-4 text-indigo-500" />}
-        </button>
-      </div>
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-center w-9 h-9"
+            title={isDark ? t.lightMode : t.darkMode}
+          >
+            {isDark ? <Sun className="w-4 h-4 text-amber-500 animate-[spin_5s_linear_infinite]" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+          </button>
+        </div>
+      </header>
 
       <div className="max-w-5xl mx-auto px-6 py-12 md:py-20 flex-1 flex flex-col justify-center items-center text-center">
         {/* Subtle glowing element */}
