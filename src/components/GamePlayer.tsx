@@ -25,6 +25,22 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const [hasAnswered, setHasAnswered] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Maintain refs to avoid stale closure pitfalls in interval timers and realtime database subscriptions
+  const questionsRef = React.useRef<Question[]>([]);
+  const isLoadingRef = React.useRef<boolean>(true);
+  const isFetchingQuestionsRef = React.useRef<boolean>(false);
+
+  const updateQuestions = (newQuestions: Question[]) => {
+    questionsRef.current = newQuestions;
+    setQuestions(newQuestions);
+  };
+
+  const updateIsLoading = (loading: boolean) => {
+    isLoadingRef.current = loading;
+    setIsLoading(loading);
+  };
+
   const [playerUid, setPlayerUid] = useState<string>("");
   const [playerCountdown, setPlayerCountdown] = useState<number | string>(3);
   const [isKicked, setIsKicked] = useState(false);
@@ -165,14 +181,18 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       });
 
       // 2. Fetch Quiz questions if not cached yet
-      if (questions.length === 0 && sessionData.quiz_id) {
+      if (questionsRef.current.length === 0 && sessionData.quiz_id && !isFetchingQuestionsRef.current) {
+        isFetchingQuestionsRef.current = true;
         const { data: quizData, error: qErr } = await supabase
           .from("quizzes")
           .select("questions")
           .eq("id", sessionData.quiz_id)
           .single();
+        isFetchingQuestionsRef.current = false;
         if (!qErr && quizData) {
-          setQuestions(quizData.questions || []);
+          updateQuestions(quizData.questions || []);
+        } else if (qErr) {
+          console.error("Fout bij ophalen quizvragen:", qErr);
         }
       }
 
@@ -188,9 +208,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         console.error("Fout tijdens ophalen spelerdata:", pErr);
       }
 
-      if (!isLoading && !playerData) {
+      if (!isLoadingRef.current && !playerData) {
         setIsKicked(true);
-        setIsLoading(false);
+        updateIsLoading(false);
         return;
       }
 
@@ -209,7 +229,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
           setHasAnswered(true);
         }
       }
-      setIsLoading(false);
+      updateIsLoading(false);
     } catch (err) {
       console.error("Fout tijdens ophalen spelerdata:", err);
     }
@@ -261,15 +281,25 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     }
   }, [session?.status, session?.currentQuestionIndex]);
 
+  // Keep track of the last seen question index so we only reset answer state on real transitions
+  const lastQuestionIdxRef = React.useRef<number | null>(null);
+
   // Reset answer states when the question index increments/changes
   useEffect(() => {
     if (session?.currentQuestionIndex !== undefined) {
-      setHasAnswered(false);
-      setSelectedIndices([]);
+      const isNewQuestion = lastQuestionIdxRef.current !== session.currentQuestionIndex;
+      if (isNewQuestion) {
+        lastQuestionIdxRef.current = session.currentQuestionIndex;
+        setHasAnswered(false);
+        setSelectedIndices([]);
+      }
+
       const currentQ = questions[session.currentQuestionIndex];
       if (currentQ && currentQ.questionType === "slider" && currentQ.options) {
-        setSliderVal(Math.ceil(currentQ.options.length / 2));
-      } else {
+        if (isNewQuestion) {
+          setSliderVal(Math.ceil(currentQ.options.length / 2));
+        }
+      } else if (isNewQuestion) {
         setSliderVal(3);
       }
     }

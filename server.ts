@@ -30,6 +30,8 @@ async function startServer() {
           lowerKey === "origin" || 
           lowerKey === "referer" ||
           lowerKey === "connection" ||
+          lowerKey === "upgrade" ||
+          lowerKey === "keep-alive" ||
           lowerKey === "content-length"
         ) {
           continue;
