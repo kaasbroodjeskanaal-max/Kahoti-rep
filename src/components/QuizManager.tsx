@@ -406,6 +406,19 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         questions: parsedQuestions,
       };
 
+      if (editingQuizId) {
+        // Ownership safety check: confirm the quiz belongs to the user
+        const { data: existingQuiz } = await supabase
+          .from("quizzes")
+          .select("created_by")
+          .eq("id", editingQuizId)
+          .single();
+
+        if (existingQuiz && existingQuiz.created_by !== uId) {
+          throw new Error("Je bent niet geautoriseerd om de quiz van een andere gebruiker te bewerken.");
+        }
+      }
+
       const { error } = await supabase
         .from("quizzes")
         .upsert(payload);
@@ -448,10 +461,12 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const handleDeleteQuiz = async (quizId: string) => {
     if (!confirm("Weet je zeker dat je deze quiz wilt verwijderen?")) return;
     try {
+      const uId = await getUserId();
       const { error } = await supabase
         .from("quizzes")
         .delete()
-        .eq("id", quizId);
+        .eq("id", quizId)
+        .eq("created_by", uId);
 
       if (error) throw new Error(error.message);
       fetchQuizzes(true);

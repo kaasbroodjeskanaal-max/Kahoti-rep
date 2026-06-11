@@ -9,7 +9,7 @@ import { translations } from "../translations";
 // Fun Dutch character personality tags to make customization incredibly delightful!
 export const BASE_DESCRIPTIONS: Record<string, string> = {
   earth: "De Wereldreiziger: Heeft overal fans! 🗺️",
-  robot: "De AI Professor: Weet alles sneller! 🤖",
+  robot: "De Robot Professor: Weet alles sneller! 🤖",
   ghost: "De Spookachtige Schitteraar: Zweeft door de vragen! 👻",
   alien: "De Ruimtevaarder: Kennis uit andere dimensies! 👽",
   cat: "De Chille Huiskat: Altijd scherp, nooit gestrest! 🐱",
@@ -314,19 +314,12 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       }
 
       if (existingSameNamePlayers && existingSameNamePlayers.length > 0) {
-        const toDeleteIds: string[] = [];
         for (const p of existingSameNamePlayers) {
           const parts = (p.nickname || "").split(":::");
           const namePart = parts[0] ? parts[0].replace("__verified__", "") : "";
           if (namePart.toLowerCase() === currentName.toLowerCase() && p.id !== playerUid) {
-            toDeleteIds.push(p.id);
+            throw new Error("Deze nickname is al in gebruik in deze lobby! Kies s.v.p. een andere naam.");
           }
-        }
-        if (toDeleteIds.length > 0) {
-          await supabase
-            .from("players")
-            .delete()
-            .in("id", toDeleteIds);
         }
       }
 

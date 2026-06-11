@@ -1,9 +1,78 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
 dotenv.config();
+
+const LOG_FILE = path.join(process.cwd(), "proxy_logs.txt");
+
+// Securely redact sensitive fields (passwords, tokens, cookies, auth keys) from logs
+function redactSensitiveData(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== "object") {
+    if (typeof obj === "string") {
+      // Mask any JSON strings, JWT tokens or long auth strings
+      if (obj.startsWith("Bearer ") || obj.length > 100 || /eyJh|eyJp/i.test(obj)) {
+        return `${obj.substring(0, 15)}...[REDACTED JWT/TOKEN]...`;
+      }
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactSensitiveData(item));
+  }
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    const lowerKey = key.toLowerCase();
+    if (
+      lowerKey.includes("password") ||
+      lowerKey.includes("secret") ||
+      lowerKey === "apikey" ||
+      lowerKey === "authorization" ||
+      lowerKey === "cookie" ||
+      lowerKey === "set-cookie" ||
+      lowerKey === "token" ||
+      lowerKey === "access_token" ||
+      lowerKey === "refresh_token"
+    ) {
+      if (typeof val === "string") {
+        result[key] = `${val.substring(0, Math.min(8, val.length))}... [REDACTED]`;
+      } else {
+        result[key] = "[REDACTED]";
+      }
+    } else {
+      result[key] = redactSensitiveData(val);
+    }
+  }
+  return result;
+}
+
+// Check and clean JSON response bodies to block personal or access credential leaks
+function sanitizeResponseBody(text: string): string {
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text);
+    return JSON.stringify(redactSensitiveData(parsed), null, 2).substring(0, 500);
+  } catch {
+    if (/token|password|secret|apikey/i.test(text)) {
+      return "[REDACTED due to sensitive keywords]";
+    }
+    return text.substring(0, 500);
+  }
+}
+
+function writeLog(message: string, data?: any) {
+  try {
+    const timestamp = new Date().toISOString();
+    const sanitizedData = data ? redactSensitiveData(data) : undefined;
+    const logMsg = `[${timestamp}] ${message} ${sanitizedData ? JSON.stringify(sanitizedData, null, 2) : ""}\n`;
+    fs.appendFileSync(LOG_FILE, logMsg, "utf8");
+  } catch (err) {
+    console.error("Fout bij schrijven naar logbestand:", err);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -11,17 +80,33 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Clean log file on boot
+  try {
+    fs.writeFileSync(LOG_FILE, "=== PROXY LOGS STARTED ===\n", "utf8");
+  } catch {}
+
   // Same-Origin Reverse Proxy for Supabase REST (Postgrest) and Authentication
   app.all("/api/supabase/*", async (req, res) => {
     // Extract the relative path and query string from req.url
     const relativePart = req.url.replace(/^\/api\/supabase/, "");
+    
+    // Security check 1: Ensure path begins with a slash to preserve relative URL scope
+    if (relativePart && !relativePart.startsWith("/")) {
+      return res.status(400).json({ error: "Invalid path format: must start with a slash" });
+    }
+
+    // Security check 2: Strict prevention of directory traversal attacks escaping the sub-path
+    if (relativePart.includes("../") || relativePart.includes("..\\")) {
+      return res.status(400).json({ error: "Path traversal attempt detected" });
+    }
+
     const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://mmztdudyztfvvoobtcwx.supabase.co";
     const targetUrl = `${supabaseUrl}${relativePart}`;
 
     try {
       const headers: Record<string, string> = {};
       
-      // Copy incoming request headers (skipping hop-by-hop & host headers to avoid connection failure)
+      // Copy incoming request headers (skipping hop-by-hop & security/compression headers)
       for (const [key, val] of Object.entries(req.headers)) {
         if (!val) continue;
         const lowerKey = key.toLowerCase();
@@ -32,12 +117,22 @@ async function startServer() {
           lowerKey === "connection" ||
           lowerKey === "upgrade" ||
           lowerKey === "keep-alive" ||
-          lowerKey === "content-length"
+          lowerKey === "content-length" ||
+          lowerKey === "accept-encoding" ||
+          lowerKey === "sec-fetch-site" ||
+          lowerKey === "sec-fetch-mode" ||
+          lowerKey === "sec-fetch-dest" ||
+          lowerKey.startsWith("sec-ch-")
         ) {
           continue;
         }
         headers[key] = Array.isArray(val) ? val.join(", ") : val;
       }
+
+      writeLog(`PROXY-REQ: ${req.method} ${targetUrl}`, {
+        incomingHeaders: req.headers,
+        forwardedHeaders: headers
+      });
 
       // Add fallback publishable key if client headers aren't explicitly sending them
       const apiKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_7Hqc3i7W1ClgfrY4PvEvCA_5_gB-idt";
@@ -61,7 +156,13 @@ async function startServer() {
         body: requestBody,
       });
 
-      // Forward response status
+      // Send response body content and keep track of status
+      const text = await response.text();
+
+      writeLog(`PROXY-RES: status=${response.status} from ${targetUrl}`, {
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+        responseBodySnippet: sanitizeResponseBody(text)
+      });
       res.status(response.status);
 
       // Forward response headers (excluding hop-by-hop headers and compression headers)
@@ -79,7 +180,6 @@ async function startServer() {
       });
 
       // Send the body content
-      const text = await response.text();
       res.send(text);
     } catch (err: any) {
       console.error("[SUPABASE-PROXY-ERROR] Proxy target failed:", err);

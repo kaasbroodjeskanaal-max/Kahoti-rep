@@ -38,8 +38,8 @@ const rawSupabaseClient = createClient(getObfuscatedUrl(), getObfuscatedKey(), {
         // Direct ws target bypasses local proxy because WebSocket is unaffected by CORS
         const rootUrl = 'https://mmztdudyztfvvoobtcwx.supabase.co';
         const directWsUrl = url.replace(
-          window.location.origin + '/api/supabase',
-          rootUrl.replace(/^http/, 'ws')
+          /wss?:\/\/[^\/]+\/api\/supabase/,
+          rootUrl.replace(/^http/, "ws")
         );
         super(directWsUrl, protocols);
       }

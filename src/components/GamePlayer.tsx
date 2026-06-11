@@ -50,6 +50,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const [allPlayersSorted, setAllPlayersSorted] = useState<{ id: string; nickname: string; score: number }[]>([]);
   const [playerRank, setPlayerRank] = useState<number | null>(null);
 
+  // Anti-cheat tracking states
+  const [isCheatingBlocked, setIsCheatingBlocked] = useState(false);
+  const [cheatStrikes, setCheatStrikes] = useState(0);
+
   const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
   const activeQuestion = questions[currentQuestionIdx];
 
@@ -292,6 +296,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         lastQuestionIdxRef.current = session.currentQuestionIndex;
         setHasAnswered(false);
         setSelectedIndices([]);
+        setIsCheatingBlocked(false);
       }
 
       const currentQ = questions[session.currentQuestionIndex];
@@ -406,6 +411,51 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
 
   const [secondsLeft, setSecondsLeft] = useState(0);
   const isAnsweringOpen = session?.status === "question";
+
+  // Anti-cheat: Track tab exits and window unfocus during active questions
+  useEffect(() => {
+    if (!session || session.status !== "question" || hasAnswered || isCheatingBlocked) {
+      return;
+    }
+
+    const handleCheat = async () => {
+      setCheatStrikes((prev) => prev + 1);
+      setIsCheatingBlocked(true);
+      setHasAnswered(true);
+
+      // Snel een ongeldig antwoord index (-1) indienen om her-indienen te blokkeren en 0 punten te forceren
+      try {
+        await supabase
+          .from("players")
+          .update({
+            current_answer_index: -1,
+            current_answer_time: 0,
+          })
+          .eq("id", playerUid)
+          .eq("session_id", sessionId);
+      } catch (err) {
+        console.error("Fout bij indienen anti-cheat straf:", err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleCheat();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      handleCheat();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [session?.status, hasAnswered, isCheatingBlocked, playerUid, sessionId]);
 
   useEffect(() => {
     if (session?.status === "question" && session?.questionStartTime) {
@@ -925,6 +975,25 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                     )}
                   </div>
                 )
+              ) : isCheatingBlocked ? (
+                /* ANTI-CHEAT BLOCKED STATE - CLEAN & SOBRE */
+                <div className={`${activeTheme.cardBg} flex-1 flex flex-col items-center justify-center text-center space-y-4 rounded-3xl p-8 shadow-md border border-white/5`}>
+                  <div className="w-16 h-16 bg-white/10 text-white rounded-full border border-white/20 flex items-center justify-center text-2xl shadow-md">
+                    🔒
+                  </div>
+                  <h3 className={`text-2xl font-display ${textTitleClass}`}>
+                    {lang === "nl" ? "Antwoord vergrendeld" : "Answer locked"}
+                  </h3>
+                  <p className={`text-sm max-w-xs ${textMutedClass}`}>
+                    {lang === "nl" 
+                      ? "Je verliet het scherm of wisselde van tabblad/venster. Je antwoord is voor deze ronde opgeschort." 
+                      : "You left the screen or switched tabs/windows. Your answer has been suspended for this round."}
+                  </p>
+                  <div className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full text-white/60 text-xs font-mono">
+                    <span>{lang === "nl" ? "Waarschuwingen:" : "Warnings:"}</span>
+                    <span className="font-bold text-white/90">{cheatStrikes}</span>
+                  </div>
+                </div>
               ) : (
                 /* WAITING TIMER STATE FOR FASTER RESPONDERS */
                 <div className={`${activeTheme.cardBg} flex-1 flex flex-col items-center justify-center text-center space-y-4 rounded-3xl p-8 shadow-md border border-white/5`}>

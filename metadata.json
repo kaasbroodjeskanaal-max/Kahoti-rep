@@ -2,5 +2,5 @@
   "name": "Kahoti",
   "description": "Realtime Quiz Builder & Playroom",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
