@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders } from "lucide-react";
+import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders, GripVertical } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { parseNicknameAndAvatar, ShapeIcon } from "../avatarUtils";
+import { parseNicknameAndAvatar, ShapeIcon, parseQuizTitle } from "../avatarUtils";
 import confetti from "canvas-confetti";
 import { LuckyWheel } from "./LuckyWheel";
 import { translations } from "../translations";
@@ -18,7 +18,7 @@ interface GamePlayerProps {
 export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }: GamePlayerProps) {
   const t = translations[lang];
 
-  const { displayName, avatarUrl } = parseNicknameAndAvatar(nickname || "");
+  const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(nickname || "");
   const [session, setSession] = useState<GameSession | null>(null);
   const [self, setSelf] = useState<Player | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -30,6 +30,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const questionsRef = React.useRef<Question[]>([]);
   const isLoadingRef = React.useRef<boolean>(true);
   const isFetchingQuestionsRef = React.useRef<boolean>(false);
+  const isFetchingSessionRef = React.useRef<boolean>(false);
 
   const updateQuestions = (newQuestions: Question[]) => {
     questionsRef.current = newQuestions;
@@ -45,6 +46,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const [playerCountdown, setPlayerCountdown] = useState<number | string>(3);
   const [isKicked, setIsKicked] = useState(false);
   const [puzzleItems, setPuzzleItems] = useState<{ originalIndex: number; text: string }[]>([]);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [sliderVal, setSliderVal] = useState<number>(3);
 
   const [allPlayersSorted, setAllPlayersSorted] = useState<{ id: string; nickname: string; score: number }[]>([]);
@@ -56,6 +58,121 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
 
   const currentQuestionIdx = session?.currentQuestionIndex ?? 0;
   const activeQuestion = questions[currentQuestionIdx];
+
+  // States & Ref for player lobby music
+  const [selectedPlayerLobbyMusicUrl, setSelectedPlayerLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
+  const playerLobbyAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!sessionId || session?.status !== "lobby") return;
+
+    const fetchLobbyMusic = async () => {
+      try {
+        const res = await fetch(`/api/session-music/${sessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.musicUrl) {
+            setSelectedPlayerLobbyMusicUrl((prev) => {
+              if (data.musicUrl !== prev) {
+                return data.musicUrl;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Fout bij ophalen speler lobbymuziek:", err);
+      }
+    };
+
+    fetchLobbyMusic();
+    const intv = setInterval(fetchLobbyMusic, 1500);
+
+    return () => clearInterval(intv);
+  }, [sessionId, session?.status]);
+
+  useEffect(() => {
+    const isLobbyActive = session?.status === "lobby";
+
+    if (isLobbyActive && selectedPlayerLobbyMusicUrl) {
+      if (!playerLobbyAudioRef.current) {
+        const audio = new Audio(selectedPlayerLobbyMusicUrl);
+        audio.loop = true;
+        playerLobbyAudioRef.current = audio;
+        audio.play().catch((e) => {
+          console.warn("Player lobby audio autoplay blocked:", e);
+        });
+      } else {
+        const currentSrc = playerLobbyAudioRef.current.src;
+        if (!currentSrc.includes(selectedPlayerLobbyMusicUrl) && selectedPlayerLobbyMusicUrl) {
+          playerLobbyAudioRef.current.src = selectedPlayerLobbyMusicUrl;
+          playerLobbyAudioRef.current.load();
+        }
+        if (playerLobbyAudioRef.current.paused) {
+          playerLobbyAudioRef.current.play().catch((e) => {
+            console.warn("Player lobby audio failed to play:", e);
+          });
+        }
+      }
+    } else {
+      if (playerLobbyAudioRef.current) {
+        playerLobbyAudioRef.current.pause();
+        playerLobbyAudioRef.current = null;
+      }
+    }
+  }, [session?.status, selectedPlayerLobbyMusicUrl]);
+
+  // Clean play on unmount completely
+  useEffect(() => {
+    return () => {
+      if (playerLobbyAudioRef.current) {
+        playerLobbyAudioRef.current.pause();
+        playerLobbyAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Audio elements for 10s and 20s questions
+  const questionAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const isQuestionActive = session?.status === "question";
+    const timeLimit = activeQuestion?.timeLimit;
+
+    if (isQuestionActive && (timeLimit === 10 || timeLimit === 20)) {
+      const url = timeLimit === 10
+        ? "https://www.image2url.com/r2/default/audio/1781202021800-73412b16-d558-4596-828e-b1fff5e7170a.mp3"
+        : "https://www.image2url.com/r2/default/audio/1781202394272-3a6b2a52-a005-4588-9d46-de96327a7bcd.mp3";
+
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+
+      const audio = new Audio(url);
+      audio.loop = false;
+      questionAudioRef.current = audio;
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Audio autoplay blocked or failed for player:", err);
+        });
+      }
+    } else {
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+    }
+
+    return () => {
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+    };
+  }, [session?.status, session?.currentQuestionIndex, activeQuestion?.timeLimit]);
 
   useEffect(() => {
     if (session?.status === "ended" && sessionId && playerUid) {
@@ -156,14 +273,27 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   }, []);
 
   const fetchSessionAndSelf = async () => {
-    if (!sessionId || !playerUid) return;
+    if (!sessionId || !playerUid || isFetchingSessionRef.current) return;
     try {
-      // 1. Fetch Session Details
-      const { data: sessionData, error: sErr } = await supabase
-        .from("sessions")
-        .select("*")
-        .eq("id", sessionId)
-        .single();
+      isFetchingSessionRef.current = true;
+
+      // 1. Fetch Session and Player info in parallel to avoid sequential network waterfall
+      const [sessionPayload, playerPayload] = await Promise.all([
+        supabase
+          .from("sessions")
+          .select("*")
+          .eq("id", sessionId)
+          .single(),
+        supabase
+          .from("players")
+          .select("*")
+          .eq("id", playerUid)
+          .eq("session_id", sessionId)
+          .maybeSingle()
+      ]);
+
+      const { data: sessionData, error: sErr } = sessionPayload;
+      const { data: playerData, error: pErr } = playerPayload;
 
       if (sErr || !sessionData) {
         alert("Plaatsen mislukt: De host heeft deze quizsessie afgesloten of de sessie bestaat niet meer.");
@@ -187,26 +317,20 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       // 2. Fetch Quiz questions if not cached yet
       if (questionsRef.current.length === 0 && sessionData.quiz_id && !isFetchingQuestionsRef.current) {
         isFetchingQuestionsRef.current = true;
-        const { data: quizData, error: qErr } = await supabase
+        supabase
           .from("quizzes")
           .select("questions")
           .eq("id", sessionData.quiz_id)
-          .single();
-        isFetchingQuestionsRef.current = false;
-        if (!qErr && quizData) {
-          updateQuestions(quizData.questions || []);
-        } else if (qErr) {
-          console.error("Fout bij ophalen quizvragen:", qErr);
-        }
+          .single()
+          .then((res) => {
+            isFetchingQuestionsRef.current = false;
+            if (!res.error && res.data) {
+              updateQuestions(res.data.questions || []);
+            } else if (res.error) {
+              console.error("Fout bij ophalen quizvragen:", res.error);
+            }
+          });
       }
-
-      // 3. Fetch Player Self info
-      const { data: playerData, error: pErr } = await supabase
-        .from("players")
-        .select("*")
-        .eq("id", playerUid)
-        .eq("session_id", sessionId)
-        .maybeSingle();
 
       if (pErr) {
         console.error("Fout tijdens ophalen spelerdata:", pErr);
@@ -236,10 +360,13 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       updateIsLoading(false);
     } catch (err) {
       console.error("Fout tijdens ophalen spelerdata:", err);
+    } finally {
+      isFetchingSessionRef.current = false;
     }
   };
 
   // 1. Double layer realtime updates: Periodical Polling fallback + Realtime listener
+  // Polling fallback interval is optimized to 1500ms (to prevent system throttle and minimize Supabase DQL usage)
   useEffect(() => {
     if (!sessionId || !playerUid) return;
 
@@ -300,9 +427,17 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       }
 
       const currentQ = questions[session.currentQuestionIndex];
-      if (currentQ && currentQ.questionType === "slider" && currentQ.options) {
+      if (currentQ && currentQ.questionType === "slider") {
         if (isNewQuestion) {
-          setSliderVal(Math.ceil(currentQ.options.length / 2));
+          const isCustom = currentQ.sliderMin !== undefined || currentQ.sliderMax !== undefined;
+          if (isCustom) {
+            const min = currentQ.sliderMin ?? 1;
+            const max = currentQ.sliderMax ?? 5;
+            const mid = Math.round((min + max) / 2);
+            setSliderVal(mid);
+          } else {
+            setSliderVal(Math.ceil((currentQ.options?.length || 5) / 2));
+          }
         }
       } else if (isNewQuestion) {
         setSliderVal(3);
@@ -340,6 +475,62 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     const [removed] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, removed);
     setPuzzleItems(updated);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === index) return;
+    
+    const updated = [...puzzleItems];
+    const draggedItem = updated[draggedIdx];
+    updated.splice(draggedIdx, 1);
+    updated.splice(index, 0, draggedItem);
+    setDraggedIdx(index);
+    setPuzzleItems(updated);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIdx(null);
+  };
+
+  const handleTouchStart = (index: number) => {
+    setDraggedIdx(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (draggedIdx === null) return;
+    
+    // Disable default body/document dragging scroll on touchmove
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!element) return;
+
+    const cardElement = element.closest("[data-puzzle-idx]");
+    if (cardElement) {
+      const targetIndex = parseInt(cardElement.getAttribute("data-puzzle-idx") || "", 10);
+      if (!isNaN(targetIndex) && targetIndex !== draggedIdx) {
+        const updated = [...puzzleItems];
+        const draggedItem = updated[draggedIdx];
+        updated.splice(draggedIdx, 1);
+        updated.splice(targetIndex, 0, draggedItem);
+        setDraggedIdx(targetIndex);
+        setPuzzleItems(updated);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setDraggedIdx(null);
   };
 
   const getPuzzleCardColor = (text: string, idx: number) => {
@@ -629,8 +820,13 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               </div>
 
               <div className="space-y-2">
-                <span className="inline-block px-3 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full uppercase tracking-wider">
                   Ingelogd als {displayName}
+                  {isVerified && (
+                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm animate-pulse" title="Geverifieerde Speler">
+                      ✓
+                    </span>
+                  )}
                 </span>
                 <h1 className={`text-2xl font-display ${textTitleClass}`}>
                   Je bent binnen!
@@ -675,9 +871,21 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 <p className="text-[10px] text-indigo-200 font-extrabold tracking-widest uppercase">
                   {currentQuestionIdx === 0 ? "QUIZ" : "VRAAG"}
                 </p>
-                <h2 className="font-extrabold font-display text-2xl md:text-3xl text-white leading-tight">
+                <h2 className="font-extrabold font-display text-2xl md:text-3xl text-white leading-tight flex flex-wrap items-center justify-center gap-2">
                   {currentQuestionIdx === 0 
-                    ? (session?.quizTitle || "Inladen...")
+                    ? (() => {
+                        const { cleanTitle, isVerified: isQuizVerified } = parseQuizTitle(session?.quizTitle || "Inladen...");
+                        return (
+                          <>
+                            <span>{cleanTitle}</span>
+                            {isQuizVerified && (
+                              <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-4 h-4 text-[9px] font-black shrink-0 shadow-sm" title="Geverifieerde Maker">
+                                ✓
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()
                     : (activeQuestion?.questionText || "Volgende vraag...")}
                 </h2>
               </div>
@@ -778,25 +986,44 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 ) : activeQuestion.questionType === "puzzle" ? (
                   <div className="flex-1 flex flex-col gap-4 pb-4 select-none">
                     <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-2xl text-center">
-                      <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">🧩 Verplaats de kaarten in de correcte volgorde!</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Bovenste is #1, onderste is de laatste.</p>
+                      <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">🧩 Sleep de kaarten in de juiste volgorde!</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Bovenste is #1, of gebruik de pijltjes.</p>
                     </div>
 
                     <div className="flex flex-col gap-2.5">
                       <AnimatePresence mode="popLayout">
                         {puzzleItems.map((item, idx) => {
                           const cardColor = getPuzzleCardColor(item.text, item.originalIndex);
+                          const isBeingDragged = draggedIdx === idx;
                           return (
                             <motion.div
                               layout
                               key={item.originalIndex}
                               initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
+                              animate={{ 
+                                opacity: isBeingDragged ? 0.75 : 1, 
+                                scale: isBeingDragged ? 1.02 : 1,
+                                y: 0 
+                              }}
                               exit={{ opacity: 0 }}
                               transition={{ type: "spring", stiffness: 350, damping: 25 }}
-                              className={`flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r ${cardColor} shadow-md border border-white/10`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, idx)}
+                              onDragOver={(e) => handleDragOver(e, idx)}
+                              onDragEnd={handleDragEnd}
+                              onDrop={(e) => handleDragOver(e, idx)}
+                              onTouchStart={() => handleTouchStart(idx)}
+                              onTouchMove={handleTouchMove}
+                              onTouchEnd={handleTouchEnd}
+                              data-puzzle-idx={idx}
+                              className={`flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r ${cardColor} shadow-md border ${
+                                isBeingDragged ? "border-purple-300 shadow-purple-500/30" : "border-white/10"
+                              } cursor-grab active:cursor-grabbing transition-shadow hover:shadow-lg`}
                             >
-                              <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <span className="text-white/40 hover:text-white transition-colors p-1 shrink-0 select-none">
+                                  <GripVertical className="w-5 h-5" />
+                                </span>
                                 <span className="w-7 h-7 rounded-lg bg-black/25 flex items-center justify-center font-black font-mono text-xs text-white shrink-0">
                                   {idx + 1}
                                 </span>
@@ -805,7 +1032,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
                                 <button
                                   type="button"
                                   onClick={() => moveItem(idx, idx - 1)}
@@ -848,10 +1075,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   <div className="flex-1 flex flex-col gap-6 py-4 px-2 space-y-4 select-none">
                     <div className="text-center">
                       <span className="text-sm font-black tracking-widest text-teal-400 uppercase flex items-center justify-center gap-1">
-                        🎚️ Schuif naar het juiste getal
+                        🎚️ Schuif of typ het juiste getal
                       </span>
                       <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                        Gebruik de schuifbalk om een waarde van 1 tot {activeQuestion.options?.length ?? 5} te kiezen!
+                        Gebruik de schuifbalk om een waarde van {(activeQuestion.sliderMin ?? 1).toLocaleString("nl-NL")} tot {(activeQuestion.sliderMax ?? (activeQuestion.options?.length ?? 5)).toLocaleString("nl-NL")} te kiezen!
                       </p>
                     </div>
 
@@ -862,61 +1089,101 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                         key={sliderVal}
                         initial={{ scale: 0.75, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        className="w-28 h-28 rounded-full bg-teal-500 text-white text-5xl font-black font-display flex items-center justify-center shadow-lg shadow-teal-500/25 border-4 border-white relative"
+                        className="px-6 h-24 min-w-[7rem] rounded-3xl bg-teal-500 text-white text-3xl md:text-3xl font-black font-display flex flex-col items-center justify-center shadow-lg shadow-teal-500/25 border-4 border-white relative"
                       >
-                        {sliderVal}
-                        <div className="absolute -bottom-1 bg-black text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest">
-                          SCHAAL
+                        <span>{sliderVal?.toLocaleString("nl-NL")}</span>
+                        <div className="absolute -bottom-2 bg-black text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest leading-none border border-teal-500/30">
+                          Gekozen
                         </div>
                       </motion.div>
                     </div>
 
                     {/* Highly tactile slider input */}
                     <div className="space-y-4 px-4">
-                      <input
-                        type="range"
-                        min="1"
-                        max={activeQuestion.options?.length ?? 5}
-                        step="1"
-                        value={sliderVal}
-                        onChange={(e) => setSliderVal(Number(e.target.value))}
-                        className="w-full h-3 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-teal-500 border border-slate-800"
-                      />
-                      <div className="flex justify-between text-xs font-mono text-slate-400 px-1 font-bold">
-                        <span>Min (1)</span>
-                        <span>Midden ({Math.ceil((activeQuestion.options?.length ?? 5) / 2)})</span>
-                        <span>Max ({activeQuestion.options?.length ?? 5})</span>
-                      </div>
+                      {(() => {
+                        const min = activeQuestion.sliderMin ?? 1;
+                        const max = activeQuestion.sliderMax ?? (activeQuestion.options?.length ?? 5);
+                        const step = activeQuestion.sliderStep ?? 1;
+                        const mid = Math.round((min + max) / 2);
+                        return (
+                          <>
+                            <input
+                              type="range"
+                              min={min}
+                              max={max}
+                              step={step}
+                              value={sliderVal}
+                              onChange={(e) => setSliderVal(Number(e.target.value))}
+                              className="w-full h-3 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-teal-500 border border-slate-800"
+                            />
+                            <div className="flex justify-between text-xs font-mono text-slate-400 px-1 font-bold">
+                              <span>Min ({min.toLocaleString("nl-NL")})</span>
+                              <span>Midden ({mid.toLocaleString("nl-NL")})</span>
+                              <span>Max ({max.toLocaleString("nl-NL")})</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
-                    {/* Selector Dots */}
-                    <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
-                      {(activeQuestion.options || ["1", "2", "3", "4", "5"]).map((_, idx) => {
-                        const num = idx + 1;
+                    {/* Selector Dots or Input Textbox depending on custom scale */}
+                    {(() => {
+                      const isCustom = activeQuestion.sliderMin !== undefined || activeQuestion.sliderMax !== undefined;
+                      const min = activeQuestion.sliderMin ?? 1;
+                      const max = activeQuestion.sliderMax ?? (activeQuestion.options?.length ?? 5);
+                      const step = activeQuestion.sliderStep ?? 1;
+                      
+                      if (isCustom) {
                         return (
-                          <button
-                            key={num}
-                            type="button"
-                            onClick={() => setSliderVal(num)}
-                            className={`w-9 h-9 rounded-full font-black text-sm flex items-center justify-center border-2 transition-all cursor-pointer ${
-                              sliderVal === num
-                                ? "bg-teal-500 border-teal-600 text-white shadow-md scale-110"
-                                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-                            }`}
-                          >
-                            {num}
-                          </button>
+                          <div className="flex items-center gap-3 justify-center pt-2 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
+                            <span className="text-xs font-semibold text-slate-400">Of typ je antwoord:</span>
+                            <input
+                              type="number"
+                              min={min}
+                              max={max}
+                              step={step}
+                              value={sliderVal}
+                              onChange={(e) => {
+                                let val = Number(e.target.value);
+                                setSliderVal(val);
+                              }}
+                              className="w-36 px-3 py-1.5 border border-slate-700 bg-slate-950 text-center font-extrabold text-sm text-teal-400 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 transition shadow-inner"
+                            />
+                          </div>
                         );
-                      })}
-                    </div>
+                      } else {
+                        return (
+                          <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+                            {(activeQuestion.options || ["1", "2", "3", "4", "5"]).map((_, idx) => {
+                              const num = idx + 1;
+                              return (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  onClick={() => setSliderVal(num)}
+                                  className={`w-9 h-9 rounded-full font-black text-sm flex items-center justify-center border-2 transition-all cursor-pointer ${
+                                    sliderVal === num
+                                      ? "bg-teal-500 border-teal-600 text-white shadow-md scale-110"
+                                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                                  }`}
+                                >
+                                  {num}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+                    })()}
 
                     <button
                       onClick={async () => {
-                        await submitAnswerToSupabase(sliderVal - 1);
+                        const isCustom = activeQuestion.sliderMin !== undefined || activeQuestion.sliderMax !== undefined;
+                        await submitAnswerToSupabase(isCustom ? sliderVal : sliderVal - 1);
                       }}
                       className="w-full bg-teal-600 hover:bg-teal-500 text-white font-display font-black py-4 rounded-2xl border-b-6 border-teal-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
                     >
-                      Bevestig Getal ({sliderVal}) ⭐
+                      Bevestig Getal ({sliderVal?.toLocaleString("nl-NL")}) ⭐
                     </button>
                   </div>
                 ) : (
@@ -1195,7 +1462,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                       const playerAtPlace = allPlayersSorted[place - 1];
 
                       if (isPlaceRevealed && playerAtPlace) {
-                        const { displayName: pName, avatarUrl: pAvatar } = parseNicknameAndAvatar(playerAtPlace.nickname || "");
+                        const { displayName: pName, avatarUrl: pAvatar, isVerified: isPVerified } = parseNicknameAndAvatar(playerAtPlace.nickname || "");
                         const isYou = playerRank === place;
                         return (
                           <motion.div
@@ -1218,6 +1485,11 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                               <div className="min-w-0 text-left">
                                 <p className="font-bold text-slate-205 text-sm truncate flex items-center gap-1.5">
                                   <span className="text-white">{pName.replace(/[:|~]/g, "")}</span>
+                                  {isPVerified && (
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
+                                      ✓
+                                    </span>
+                                  )}
                                   {isYou && (
                                     <span className="bg-indigo-500 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded-sm">Jij!</span>
                                   )}

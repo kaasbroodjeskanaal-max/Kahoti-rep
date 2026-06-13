@@ -4,8 +4,8 @@
   "description": "Een live multiplayer quiz en enquête platform met realtime interacties, sliders en puzzels.",
   "id": "/?source=pwa",
   "start_url": "/?source=pwa",
-  "background_color": "#020617",
-  "theme_color": "#4f46e5",
+  "background_color": "#050505",
+  "theme_color": "#9333ea",
   "display": "standalone",
   "orientation": "portrait-primary",
   "icons": [

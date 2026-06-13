@@ -352,25 +352,22 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
   };
 
   return (
-    <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-[75vh]">
+    <div className="w-full max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-[75vh] relative z-10 w-full animate-fade-in">
       {/* Decorative Brand with Logo */}
-      <div className="relative mb-4 flex justify-center">
-        <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full scale-110" />
-        <img 
-          src="https://cdn.imageurlgenerator.com/uploads/9df1cd72-ee23-4abc-8f99-c7bf3a38bebc.jpeg"
-          alt="Kahoti Logo"
-          className="relative w-24 h-24 object-cover rounded-2xl border-4 border-white dark:border-slate-800 shadow-lg"
-          referrerPolicy="no-referrer"
-        />
+      <div className="relative mb-6 flex justify-center mt-8">
+        <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full scale-125 animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="relative w-28 h-28 bg-purple-600 rounded-3xl flex items-center justify-center shadow-xl shadow-purple-600/30 border-4 border-white dark:border-[#050505] transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+           <Sparkles className="w-12 h-12 text-white" />
+        </div>
       </div>
 
-      <h1 className="text-4xl md:text-5xl font-extrabold font-display tracking-tight text-center mb-8 bg-linear-to-r from-indigo-600 via-pink-650 to-amber-500 bg-clip-text text-transparent drop-shadow-xs">
-        Kahoti!
+      <h1 className="text-4xl md:text-5xl font-extrabold font-display tracking-tight text-center mb-10 text-slate-900 dark:text-white drop-shadow-sm">
+        Kahoti
       </h1>
 
-      <div className="w-full bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-md border border-slate-50 dark:border-slate-800 relative overflow-hidden">
+      <div className="w-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-2xl shadow-purple-900/10 dark:shadow-purple-900/20 border border-slate-200/50 dark:border-slate-800/80 relative overflow-hidden">
         {/* Subtle decorative strip */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-linear-to-r from-red-500 via-blue-500 via-yellow-450 to-green-500" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-500" />
 
         {step === "code" ? (
           /* STEP 1: ENTER CODE */
@@ -383,17 +380,17 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
             </div>
 
             <div>
-              <input
-                type="text"
-                pattern="[0-9]*"
-                maxLength={6}
-                required
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                placeholder="000 000"
-                className="w-full text-center tracking-[0.5em] font-mono text-3xl font-extrabold px-4 py-4 border-2 border-indigo-100 dark:border-indigo-950 rounded-2xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 text-slate-900 dark:text-white"
-                disabled={isLoading}
-              />
+                <input
+                  type="text"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000 000"
+                  className="w-full text-center tracking-[0.4em] font-mono text-4xl font-extrabold px-4 py-5 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950/50 dark:focus:bg-slate-900 text-slate-900 dark:text-white shadow-inner"
+                  disabled={isLoading}
+                />
             </div>
 
             {error && (
@@ -413,7 +410,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               <button
                 type="submit"
                 disabled={isLoading || code.length !== 6}
-                className="w-2/3 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -427,13 +424,13 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
           /* STEP 2: CHOOSE NICKNAME & AVATAR */
           <form onSubmit={handleJoinLobby} className="space-y-6">
             <div className="text-center">
-              <span className="inline-block px-3 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 font-mono font-bold text-sm rounded-full mb-3">
+              <span className="inline-block px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-mono font-bold text-xs rounded-full mb-4 uppercase tracking-widest border border-purple-200/50 dark:border-purple-800/50">
                 {lang === "nl" ? "Lobby gevonden!" : "Lobby found!"}
               </span>
-              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-1">
+              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-2">
                 {lang === "nl" ? "Avatar & Nickname" : "Avatar & Nickname"}
               </h2>
-              <p className="text-gray-500 dark:text-slate-400 text-xs">
+              <p className="text-gray-500 dark:text-slate-400 text-sm">
                 {lang === "nl" ? "Ontwerp je avatar en voer je spelersnaam in!" : "Design your avatar and enter your player name!"}
               </p>
             </div>
@@ -444,8 +441,8 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               {/* Immersive Pod Showcase Zone */}
               <div className="flex flex-col items-center p-5 bg-linear-to-b from-slate-900 via-slate-950 to-slate-900 rounded-2xl border border-slate-850 w-full relative overflow-hidden shadow-inner">
                 {/* Spotlight background radiation */}
-                <div className="absolute inset-0 bg-radial-to-t from-transparent via-transparent to-indigo-500/10 opacity-60 pointer-events-none" />
-                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-45 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute inset-0 bg-radial-to-t from-transparent via-transparent to-purple-500/10 opacity-60 pointer-events-none" />
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-45 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
                 
                 <div className="relative z-10 flex flex-col items-center">
                   {/* Floating/Reactive Showcased Avatar */}
@@ -493,7 +490,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                     
                     {/* Active sparkle overlay */}
                     {isSpinning && (
-                      <div className="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping pointer-events-none" />
+                      <div className="absolute inset-0 bg-purple-500/20 rounded-full animate-ping pointer-events-none" />
                     )}
                   </motion.div>
 
@@ -502,7 +499,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                     <p className="font-black text-white text-base truncate max-w-[200px]">
                       {nickname || "Kies een naam..."}
                     </p>
-                    <span className="inline-flex px-2.5 py-0.5 bg-indigo-500/10 text-indigo-400 font-mono text-[9px] uppercase tracking-wider font-extrabold rounded-full border border-indigo-500/20">
+                    <span className="inline-flex px-2.5 py-0.5 bg-purple-500/10 text-purple-400 font-mono text-[9px] uppercase tracking-wider font-extrabold rounded-full border border-purple-500/20">
                       {AVATAR_BASES[baseIdx]?.name.split(" ")[0]} ✦ {AVATAR_GRADIENTS[gradIdx]?.name}
                     </span>
                     <p className="text-[10px] text-slate-400 italic max-w-[260px] leading-relaxed select-none">
@@ -519,7 +516,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                     type="button"
                     onClick={startMysterySpin}
                     disabled={isSpinning}
-                    className="bg-indigo-650 hover:bg-indigo-500 text-white p-2 rounded-xl shadow-lg border border-indigo-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs font-bold"
+                    className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-xl shadow-lg border border-purple-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs font-bold"
                     title="Mystery Spin"
                   >
                     <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isSpinning ? "animate-spin" : ""}`} />
@@ -535,7 +532,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   onClick={() => setAvatarTab("base")}
                   className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
                     avatarTab === "base"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold"
+                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
                       : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
                   }`}
                 >
@@ -546,7 +543,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   onClick={() => setAvatarTab("hat")}
                   className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
                     avatarTab === "hat"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold"
+                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
                       : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
                   }`}
                 >
@@ -557,7 +554,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   onClick={() => setAvatarTab("acc")}
                   className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
                     avatarTab === "acc"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold"
+                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
                       : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
                   }`}
                 >
@@ -568,7 +565,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   onClick={() => setAvatarTab("bg")}
                   className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
                     avatarTab === "bg"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold"
+                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
                       : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
                   }`}
                 >
@@ -579,7 +576,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   onClick={() => setAvatarTab("style")}
                   className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1 ${
                     avatarTab === "style"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 font-extrabold"
+                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
                       : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
                   }`}
                 >
@@ -598,7 +595,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                         onClick={() => { setBaseIdx(idx); triggerReaction(); }}
                         className={`aspect-square flex flex-col items-center justify-center text-2xl rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 ${
                           baseIdx === idx 
-                            ? "bg-indigo-50 dark:bg-indigo-950/40 border-2 border-indigo-600 shadow-xs" 
+                            ? "bg-purple-50 dark:bg-purple-900/40 border-2 border-purple-600 shadow-xs" 
                             : b.emoji === "" 
                               ? "bg-slate-100 dark:bg-slate-950 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-850"
                               : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
@@ -620,7 +617,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                         onClick={() => { setHatIdx(idx); setCustomHatX(0); setCustomHatY(0); setCustomHatSize(0); triggerReaction(); }}
                         className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 gap-1 ${
                           hatIdx === idx 
-                            ? "bg-indigo-50 dark:bg-indigo-950/45 border-2 border-indigo-600 shadow-xs" 
+                            ? "bg-purple-50 dark:bg-purple-900/45 border-2 border-purple-600 shadow-xs" 
                             : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
                         }`}
                         title={h.name}
@@ -641,7 +638,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                         onClick={() => { setAccIdx(idx); setCustomAccX(0); setCustomAccY(0); setCustomAccSize(0); triggerReaction(); }}
                         className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 gap-1 ${
                           accIdx === idx 
-                            ? "bg-indigo-100/30 dark:bg-indigo-950/45 border-2 border-indigo-600 shadow-xs" 
+                            ? "bg-purple-100/30 dark:bg-purple-900/45 border-2 border-purple-600 shadow-xs" 
                             : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
                         }`}
                         title={a.name}
@@ -663,7 +660,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                         style={{ background: `linear-gradient(135deg, ${g.stops[0]}, ${g.stops[1]})` }}
                         className={`py-2 px-1 rounded-xl text-[10px] font-black text-white text-shadow shadow-xs transition hover:scale-105 cursor-pointer text-center relative ${
                           gradIdx === idx 
-                            ? "ring-4 ring-indigo-500 outline-none scale-102" 
+                            ? "ring-4 ring-purple-500 outline-none scale-102" 
                             : "opacity-85 border border-white dark:border-slate-900"
                         }`}
                       >
@@ -677,7 +674,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                   <div className="space-y-4 p-2 animate-fade-in text-left">
                     {/* Hat Nudging */}
                     <div className="bg-slate-100/30 dark:bg-slate-950/30 p-3 rounded-xl space-y-3 border border-slate-200/40 dark:border-slate-900">
-                      <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">👑 Positie Hoofddeksel</p>
+                      <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">👑 Positie Hoofddeksel</p>
                       {hatIdx === 0 ? (
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">Kies overmorgen eerst een hoed om deze te kneden!</p>
                       ) : (
@@ -693,7 +690,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="25"
                               value={customHatSize}
                               onChange={(e) => { setCustomHatSize(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
                             />
                           </div>
                           <div>
@@ -707,7 +704,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="20"
                               value={customHatY}
                               onChange={(e) => { setCustomHatY(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
                             />
                           </div>
                           <div>
@@ -721,7 +718,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="20"
                               value={customHatX}
                               onChange={(e) => { setCustomHatX(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
                             />
                           </div>
                         </div>
@@ -730,7 +727,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
 
                     {/* Lens/Acc Nudging */}
                     <div className="bg-slate-100/30 dark:bg-slate-950/30 p-3 rounded-xl space-y-3 border border-slate-200/40 dark:border-slate-900">
-                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">🕶️ Positie Extra/Bril</p>
+                      <p className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1">🕶️ Positie Extra/Bril</p>
                       {accIdx === 0 ? (
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">Kies eerst een bril of extra item om deze te kneden!</p>
                       ) : (
@@ -746,7 +743,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="25"
                               value={customAccSize}
                               onChange={(e) => { setCustomAccSize(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
                             />
                           </div>
                           <div>
@@ -760,7 +757,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="20"
                               value={customAccY}
                               onChange={(e) => { setCustomAccY(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
                             />
                           </div>
                           <div>
@@ -774,7 +771,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                               max="20"
                               value={customAccX}
                               onChange={(e) => { setCustomAccX(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
                             />
                           </div>
                         </div>
@@ -793,7 +790,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
                 placeholder={lang === "nl" ? "Bijv. QuizKoning" : "e.g. QuizKing"}
-                className="w-full text-center text-lg font-bold px-4 py-3 border-2 border-indigo-100 dark:border-indigo-950 rounded-xl focus:border-indigo-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950 dark:focus:bg-slate-900 text-slate-900 dark:text-white"
+                className="w-full text-center text-lg font-bold px-4 py-4 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950/50 dark:focus:bg-slate-900 text-slate-900 dark:text-white shadow-inner"
                 disabled={isLoading}
               />
             </div>
@@ -808,7 +805,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               <button
                 type="button"
                 onClick={() => setStep("code")}
-                className="w-1/3 flex items-center justify-center border border-gray-200 dark:border-slate-805 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300 py-4 rounded-xl font-semibold transition cursor-pointer"
+                className="w-1/3 flex items-center justify-center border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 py-4 rounded-xl font-bold transition cursor-pointer uppercase tracking-wider text-sm"
                 disabled={isLoading}
               >
                 {t.back}
@@ -816,13 +813,13 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               <button
                 type="submit"
                 disabled={isLoading || !nickname.trim()}
-                className="w-2/3 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold shadow-md transition cursor-pointer disabled:opacity-50"
+                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-black shadow-lg shadow-purple-600/30 transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none uppercase tracking-widest text-sm"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-current" /> {lang === "nl" ? "Spelen!" : "Play!"}
+                    <Play className="w-5 h-5 fill-current" /> {lang === "nl" ? "Meedoen!" : "Join!"}
                   </>
                 )}
               </button>

@@ -10,6 +10,10 @@ export interface Question {
   questionType?: "multiple_choice" | "true_false" | "wheel_spin" | "puzzle" | "slider";
   theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
   lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
+  lobbyMusicUrl?: string;
+  sliderMin?: number;
+  sliderMax?: number;
+  sliderStep?: number;
 }
 
 export interface Quiz {
@@ -22,6 +26,7 @@ export interface Quiz {
   questions: Question[];
   theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
   lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
+  lobbyMusicUrl?: string;
 }
 
 export interface GameSession {
@@ -62,9 +67,13 @@ export const checkIsCorrect = (playerAnswerIndex: number | null, question: Quest
   }
   
   if (question.questionType === "slider") {
-    // Slider check against the nominated target index (0-based)
-    const correctIdx = question.correctOptionIndex ?? 2;
-    return playerAnswerIndex === correctIdx;
+    const isCustom = question.sliderMin !== undefined || question.sliderMax !== undefined;
+    if (isCustom) {
+      return playerAnswerIndex === question.correctOptionIndex;
+    } else {
+      const correctIdx = question.correctOptionIndex ?? 2;
+      return playerAnswerIndex === correctIdx;
+    }
   }
 
   const correctIndices = question.correctOptionIndices || [question.correctOptionIndex ?? 0];

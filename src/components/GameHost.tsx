@@ -45,6 +45,86 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [countdownVal, setCountdownVal] = useState<number | string>(3);
   const [isSkippingLeaderboard, setIsSkippingLeaderboard] = useState(false);
+  const isFetchingSessionAndPlayersRef = useRef(false);
+
+  // States & ref for background lobby music
+  const [selectedLobbyMusicUrl, setSelectedLobbyMusicUrl] = useState(() => {
+    return quiz.lobbyMusicUrl || quiz.questions?.[0]?.lobbyMusicUrl || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
+  });
+  const lobbyAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const initLobbyMusic = async () => {
+      const defaultMusic = quiz.lobbyMusicUrl || quiz.questions?.[0]?.lobbyMusicUrl || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
+      try {
+        await fetch(`/api/session-music/${sessionId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ musicUrl: defaultMusic }),
+        });
+        setSelectedLobbyMusicUrl(defaultMusic);
+      } catch (err) {
+        console.error("Fout bij opzetten lobbymuziek op server:", err);
+      }
+    };
+    initLobbyMusic();
+  }, [sessionId, quiz.lobbyMusicUrl, quiz.questions]);
+
+  const changeLobbyMusic = async (url: string) => {
+    setSelectedLobbyMusicUrl(url);
+    if (!sessionId) return;
+    try {
+      await fetch(`/api/session-music/${sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ musicUrl: url }),
+      });
+    } catch (err) {
+      console.error("Fout bij opslaan lobbymuziek:", err);
+    }
+  };
+
+  useEffect(() => {
+    const isLobbyActive = session?.status === "lobby";
+
+    if (isLobbyActive && selectedLobbyMusicUrl) {
+      if (!lobbyAudioRef.current) {
+        const audio = new Audio(selectedLobbyMusicUrl);
+        audio.loop = true;
+        lobbyAudioRef.current = audio;
+        audio.play().catch((e) => {
+          console.warn("Lobby audio autoplay blocked:", e);
+        });
+      } else {
+        const currentSrc = lobbyAudioRef.current.src;
+        if (!currentSrc.includes(selectedLobbyMusicUrl) && selectedLobbyMusicUrl) {
+          lobbyAudioRef.current.src = selectedLobbyMusicUrl;
+          lobbyAudioRef.current.load();
+        }
+        if (lobbyAudioRef.current.paused) {
+          lobbyAudioRef.current.play().catch((e) => {
+            console.warn("Lobby audio failed to play:", e);
+          });
+        }
+      }
+    } else {
+      if (lobbyAudioRef.current) {
+        lobbyAudioRef.current.pause();
+        lobbyAudioRef.current = null;
+      }
+    }
+  }, [session?.status, selectedLobbyMusicUrl]);
+
+  // Clean play on unmount completely
+  useEffect(() => {
+    return () => {
+      if (lobbyAudioRef.current) {
+        lobbyAudioRef.current.pause();
+        lobbyAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Statistics and detailed analytics states
   const [quizHistory, setQuizHistory] = useState<Record<number, QuestionHistoryRecord>>({});
@@ -169,14 +249,25 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   // Dual-Layer Synchronisation: Realtime Channel + Periodic Polling (Guarantees reliability)
   const fetchSessionAndPlayers = async () => {
-    if (!sessionId) return;
+    if (!sessionId || isFetchingSessionAndPlayersRef.current) return;
     try {
-      // 1. Fetch Session
-      const { data: sessionData, error: sErr } = await supabase
-        .from("sessions")
-        .select("*")
-        .eq("id", sessionId)
-        .single();
+      isFetchingSessionAndPlayersRef.current = true;
+
+      // 1. Fetch Session and Players in parallel to optimize database roundtrips
+      const [sessionPayload, playersPayload] = await Promise.all([
+        supabase
+          .from("sessions")
+          .select("*")
+          .eq("id", sessionId)
+          .single(),
+        supabase
+          .from("players")
+          .select("*")
+          .eq("session_id", sessionId)
+      ]);
+
+      const { data: sessionData, error: sErr } = sessionPayload;
+      const { data: playersData, error: pErr } = playersPayload;
 
       if (!sErr && sessionData) {
         setSession({
@@ -195,12 +286,6 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         setIsInitializing(false);
       }
 
-      // 2. Fetch Players
-      const { data: playersData, error: pErr } = await supabase
-        .from("players")
-        .select("*")
-        .eq("session_id", sessionId);
-
       if (!pErr && playersData) {
         const list: Player[] = playersData.map((p: any) => ({
           id: p.id,
@@ -216,6 +301,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       }
     } catch (err) {
       console.error("Fout tijdens data synchronisatie:", err);
+    } finally {
+      isFetchingSessionAndPlayersRef.current = false;
     }
   };
 
@@ -249,6 +336,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   // 3. Game State Managers & Clock Counters
   const currentQuestion = session ? quiz.questions[session.currentQuestionIndex] : null;
   const firstQ = quiz.questions[0];
+
   const hostTheme = quiz.theme || firstQ?.theme || "default";
   const lobbyTheme = quiz.lobbyTheme || firstQ?.lobbyTheme || "default";
   const activeTheme = session?.status === "lobby"
@@ -260,20 +348,23 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     if (!session || !currentQuestion) return;
 
     if (session.status === "question") {
-      setTimeLeft(currentQuestion.timeLimit);
+      const updateTimer = () => {
+        const start = session.questionStartTime ? new Date(session.questionStartTime).getTime() : Date.now();
+        const elapsedMs = Date.now() - start;
+        const duration = session.questionDuration ?? currentQuestion.timeLimit ?? 20;
+        const currentSecondsLeft = Math.max(0, duration - Math.floor(elapsedMs / 1000));
+        
+        setTimeLeft(currentSecondsLeft);
 
+        if (currentSecondsLeft <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          autoTransitionToAnswer();
+        }
+      };
+
+      updateTimer();
       if (timerRef.current) clearInterval(timerRef.current);
-
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            autoTransitionToAnswer();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      timerRef.current = setInterval(updateTimer, 200);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
@@ -281,7 +372,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [session?.status, session?.currentQuestionIndex]);
+  }, [session?.status, session?.currentQuestionIndex, session?.questionStartTime, session?.questionDuration]);
 
   const isAnsweringOpen = session?.status === "question";
 
@@ -431,6 +522,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const handleStartSpel = async () => {
     if (!sessionId || !currentQuestion) return;
     try {
+      // Optimistic state update to countdown instantly on screen
+      setSession((prev) => prev ? { ...prev, status: "countdown" } : null);
+
       await supabase
         .from("sessions")
         .update({ status: "countdown" })
@@ -447,11 +541,21 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           })
           .eq("session_id", sessionId);
 
+        const startTime = new Date().toISOString();
+
+        // Optimistic state update to question instantly on screen
+        setSession((prev) => prev ? {
+          ...prev,
+          status: "question",
+          questionStartTime: startTime,
+          questionDuration: currentQuestion.timeLimit,
+        } : null);
+
         await supabase
           .from("sessions")
           .update({
             status: "question",
-            question_start_time: new Date().toISOString(),
+            question_start_time: startTime,
             question_duration: currentQuestion.timeLimit,
           })
           .eq("id", sessionId);
@@ -543,12 +647,21 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       const isLast = nextIdx >= quiz.questions.length;
 
       if (isLast) {
+        setSession((prev) => prev ? { ...prev, status: "ended", currentQuestionIndex: 0 } : null);
         await supabase
           .from("sessions")
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
       } else {
         const nextQ = quiz.questions[nextIdx];
+
+        // Optimistic state update to countdown instantly on screen
+        setSession((prev) => prev ? {
+          ...prev,
+          currentQuestionIndex: nextIdx,
+          questionDuration: nextQ.timeLimit,
+          status: "countdown",
+        } : null);
 
         await supabase
           .from("players")
@@ -568,11 +681,21 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .eq("id", sessionId);
 
         setTimeout(async () => {
+          const startTime = new Date().toISOString();
+
+          // Optimistic state update to question instantly on screen
+          setSession((prev) => prev ? {
+            ...prev,
+            status: "question",
+            questionStartTime: startTime,
+            questionDuration: nextQ.timeLimit,
+          } : null);
+
           await supabase
             .from("sessions")
             .update({
               status: "question",
-              question_start_time: new Date().toISOString(),
+              question_start_time: startTime,
             })
             .eq("id", sessionId);
         }, 4000);
@@ -591,12 +714,21 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
     try {
       if (isLast) {
+        setSession((prev) => prev ? { ...prev, status: "ended", currentQuestionIndex: 0 } : null);
         await supabase
           .from("sessions")
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
       } else {
         const nextQ = quiz.questions[nextIdx];
+
+        // Optimistic state update to countdown instantly on screen
+        setSession((prev) => prev ? {
+          ...prev,
+          currentQuestionIndex: nextIdx,
+          questionDuration: nextQ.timeLimit,
+          status: "countdown",
+        } : null);
 
         // Bulk Reset player answers in one query
         await supabase
@@ -617,11 +749,21 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .eq("id", sessionId);
 
         setTimeout(async () => {
+          const startTime = new Date().toISOString();
+
+          // Optimistic state update to question instantly on screen
+          setSession((prev) => prev ? {
+            ...prev,
+            status: "question",
+            question_start_time: startTime,
+            questionDuration: nextQ.timeLimit,
+          } : null);
+
           await supabase
             .from("sessions")
             .update({
               status: "question",
-              question_start_time: new Date().toISOString(),
+              question_start_time: startTime,
             })
             .eq("id", sessionId);
         }, 4000);
@@ -937,9 +1079,60 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                       <button
                         onClick={handleStartSpel}
                         disabled={players.length === 0}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition text-slate-950 py-4 rounded-2xl font-black text-lg cursor-pointer"
+                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition text-slate-950 py-4 rounded-2xl font-black text-lg cursor-pointer cursor-copy shadow-md hover:scale-[1.01] active:scale-[0.99]"
                       >
                         <Play className="w-5 h-5 fill-current" /> Start Spel
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lobby Background Music Selection Panel */}
+                  <div className="bg-slate-950/80 p-6 sm:p-8 rounded-3xl border border-slate-800/80 space-y-4 max-w-5xl mx-auto text-left relative overflow-hidden shadow-xl backdrop-blur-xs">
+                    <div className="absolute w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none -top-10 -left-10" />
+                    <div className="relative z-10">
+                      <h4 className="text-indigo-400 font-bold uppercase tracking-wider text-xs flex items-center gap-2">
+                        <span>🎵</span> Lobby Achtergrondmuziek
+                      </h4>
+                      <p className="text-slate-400 text-xs mt-1">
+                        Kies een soundtrack voor de lobby. De selectie begint meteen te spelen en wordt ook gesynchroniseerd geloopt bij wachende deelnemers.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-10">
+                      <button
+                        onClick={() => changeLobbyMusic("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3")}
+                        className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3"
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md"
+                            : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
+                        }`}
+                      >
+                        <span>Soundtrack 1 (Mellow)</span>
+                        {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
+                      </button>
+
+                      <button
+                        onClick={() => changeLobbyMusic("https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3")}
+                        className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3"
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md"
+                            : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
+                        }`}
+                      >
+                        <span>Soundtrack 2 (Retro) 🕹️</span>
+                        {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
+                      </button>
+
+                      <button
+                        onClick={() => changeLobbyMusic("https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3")}
+                        className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3"
+                            ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md"
+                            : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
+                        }`}
+                      >
+                        <span>Soundtrack 3 (Upbeat) ⚡</span>
+                        {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
                       </button>
                     </div>
                   </div>
@@ -1144,36 +1337,64 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     </div>
                   ) : !isAnsweringOpen ? (
                     <div className="bg-slate-950/60 border-2 border-dashed border-indigo-900/40 rounded-3xl p-12 text-center flex flex-col justify-center items-center gap-4 animate-pulse min-h-[220px]">
-                      <div className="w-12 h-12 rounded-full border-4 border-indigo-501 border-t-transparent animate-spin mb-2" />
+                      <div className="w-12 h-12 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mb-2" />
                       <p className="text-indigo-300 font-black text-xl uppercase tracking-wider">
                         Antwoorden openen over een moment...
                       </p>
                       <p className="text-slate-400 text-sm">Bereid je voor om snel te antwoorden!</p>
                     </div>
                   ) : currentQuestion.questionType === "slider" ? (
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center flex flex-col justify-center items-center gap-6 min-h-[220px] relative overflow-hidden w-full max-w-2xl mx-auto shadow-md">
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-teal-500/10 blur-3xl text-teal-500" />
-                      
-                      <div className="w-16 h-16 rounded-2xl bg-teal-505/10 text-teal-400 flex items-center justify-center border border-teal-500/25 shadow-inner">
-                        <Sliders className="w-8 h-8 animate-pulse text-teal-400" />
-                      </div>
+                    (() => {
+                      const min = currentQuestion.sliderMin ?? 1;
+                      const max = currentQuestion.sliderMax ?? (currentQuestion.options?.length ?? 5);
+                      const step = currentQuestion.sliderStep ?? 1;
+                      const isCustom = currentQuestion.sliderMin !== undefined || currentQuestion.sliderMax !== undefined;
+                      const rangeCount = Math.floor((max - min) / step) + 1;
 
-                      <div className="space-y-2 relative z-10 w-full max-w-lg">
-                        <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider">Kies op een schaal van 1 tot 5 🎚️</h2>
-                        <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-800 mt-4 px-6 font-mono font-bold text-slate-300">
-                          {[1, 2, 3, 4, 5].map((num) => (
-                            <span key={num} className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-lg shadow-sm font-extrabold text-white">
-                              {num}
-                            </span>
-                          ))}
+                      return (
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center flex flex-col justify-center items-center gap-6 min-h-[220px] relative overflow-hidden w-full max-w-2xl mx-auto shadow-md">
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-teal-500/10 blur-3xl text-teal-500 animate-pulse" />
+                          
+                          <div className="w-16 h-16 rounded-2xl bg-teal-500/10 text-teal-400 flex items-center justify-center border border-teal-500/25 shadow-inner">
+                            <Sliders className="w-8 h-8 animate-pulse text-teal-400 animate-bounce" />
+                          </div>
+
+                          <div className="space-y-4 relative z-10 w-full max-w-lg">
+                            <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider">
+                              Schuif naar de juiste waarde 🎚️
+                            </h2>
+                            <p className="text-xs text-slate-450 font-bold italic">
+                              Kies een waarde tussen {min.toLocaleString("nl-NL")} en {max.toLocaleString("nl-NL")}!
+                            </p>
+                            
+                            {/* Render up to 7 values for neat scale preview, else show a beautiful horizontal track */}
+                            {rangeCount <= 7 ? (
+                              <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-800 mt-2 px-6 font-mono font-bold text-slate-300">
+                                {Array.from({ length: rangeCount }, (_, i) => min + i * step).map((num) => (
+                                  <span key={num} className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-sm shadow-sm font-extrabold text-white">
+                                    {num}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="relative h-12 bg-slate-950 rounded-2xl border border-slate-850 my-6 flex items-center justify-between px-5 text-xs font-mono font-bold text-slate-400">
+                                <span className="bg-slate-900 px-3 py-1 rounded-xl border border-slate-800/80">Min: {min.toLocaleString("nl-NL")}</span>
+                                <span className="text-teal-400 font-medium tracking-wide">In stappen van: {step.toLocaleString("nl-NL")}</span>
+                                <span className="bg-slate-900 px-3 py-1 rounded-xl border border-slate-800/80">Max: {max.toLocaleString("nl-NL")}</span>
+                              </div>
+                            )}
+                            
+                            {!isCustom && (
+                              <div className="flex justify-between text-[10px] text-slate-500 pt-1 font-bold px-1">
+                                <span>Helemaal mee oneens (1)</span>
+                                <span>Neutraal (3)</span>
+                                <span>Helemaal mee eens (5)</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex justify-between text-xs text-slate-500 pt-1 font-bold">
-                          <span>Helemaal mee oneens (1)</span>
-                          <span>Neutraal (3)</span>
-                          <span>Helemaal mee eens (5)</span>
-                        </div>
-                      </div>
-                    </div>
+                      );
+                    })()
                   ) : currentQuestion.questionType === "puzzle" ? (
                     <div className="grid md:grid-cols-2 gap-4">
                       {currentQuestion.options.map((option, idx) => {
@@ -1285,41 +1506,160 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                           </div>
                         </div>
                       ) : currentQuestion.questionType === "slider" ? (
-                        <div className="space-y-3">
-                          <p className="text-xs text-teal-400 font-bold uppercase tracking-wider mb-2">Stemverdeling Schaal (1 - 5):</p>
-                          <div className="space-y-3">
-                            {[1, 2, 3, 4, 5].map((num) => {
-                              const valIdx = num - 1;
-                              const isCorrectVal = valIdx === (currentQuestion.correctOptionIndex ?? 2);
-                              const votes = players.filter(p => p.currentAnswerIndex === valIdx).length;
-                              const totalVotes = players.filter(p => p.currentAnswerIndex !== null && p.currentAnswerIndex !== undefined).length;
-                              const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
-                              return (
-                                <div key={num} className="space-y-1">
-                                  <div className="flex justify-between items-center text-xs font-bold">
-                                    <span className={`flex items-center gap-1.5 ${isCorrectVal ? "text-emerald-400 font-extrabold text-sm" : "text-slate-350"}`}>
-                                      <span>Getal {num}</span>
-                                      {isCorrectVal && (
-                                        <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase flex items-center gap-0.5">
-                                          <Check className="w-2.5 h-2.5" /> Correct
-                                        </span>
-                                      )}
-                                    </span>
-                                    <span className="text-slate-500 font-mono">
-                                      {votes} stem{votes === 1 ? "" : "men"} ({Math.round(percentage)}%)
-                                    </span>
+                        (() => {
+                          const min = currentQuestion.sliderMin ?? 1;
+                          const max = currentQuestion.sliderMax ?? (currentQuestion.options?.length ?? 5);
+                          const step = currentQuestion.sliderStep ?? 1;
+                          const isCustom = currentQuestion.sliderMin !== undefined || currentQuestion.sliderMax !== undefined;
+                          const rangeCount = Math.floor((max - min) / step) + 1;
+
+                          if (!isCustom || rangeCount <= 10) {
+                            // Render standard individual bar cards for small scales
+                            const dots: number[] = [];
+                            for (let v = min; v <= max; v += step) {
+                              dots.push(v);
+                            }
+
+                            return (
+                              <div className="space-y-3">
+                                <p className="text-xs text-teal-400 font-bold uppercase tracking-wider mb-2">
+                                  Stemverdeling Schaal ({min.toLocaleString("nl-NL")} - {max.toLocaleString("nl-NL")}):
+                                </p>
+                                <div className="space-y-3">
+                                  {dots.map((num) => {
+                                    const isCorrectVal = isCustom
+                                      ? num === currentQuestion.correctOptionIndex
+                                      : (num - 1) === (currentQuestion.correctOptionIndex ?? 2);
+                                    
+                                    const votes = players.filter(p => 
+                                      isCustom ? p.currentAnswerIndex === num : p.currentAnswerIndex === num - 1
+                                    ).length;
+                                    
+                                    const totalVotes = players.filter(p => 
+                                      p.currentAnswerIndex !== null && p.currentAnswerIndex !== undefined
+                                    ).length;
+                                    
+                                    const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+                                    
+                                    return (
+                                      <div key={num} className="space-y-1">
+                                        <div className="flex justify-between items-center text-xs font-bold">
+                                          <span className={`flex items-center gap-1.5 ${isCorrectVal ? "text-emerald-400 font-extrabold text-sm" : "text-slate-350"}`}>
+                                            <span>Getal {num.toLocaleString("nl-NL")}</span>
+                                            {isCorrectVal && (
+                                              <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase flex items-center gap-0.5 animate-pulse">
+                                                <Check className="w-2.5 h-2.5" /> Correct
+                                              </span>
+                                            )}
+                                          </span>
+                                          <span className="text-slate-500 font-mono">
+                                            {votes} stem{votes === 1 ? "" : "men"} ({Math.round(percentage)}%)
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-slate-950/40 border border-slate-800 h-5 rounded-lg overflow-hidden flex">
+                                          <div
+                                            className={`h-full transition-all duration-300 ${isCorrectVal ? "bg-emerald-500" : "bg-indigo-950/60"}`}
+                                            style={{ width: `${percentage}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            // Render state-of-the-art continuous scale gauge for large/custom ranges
+                            const correctVal = currentQuestion.correctOptionIndex ?? min;
+                            const answeredPlayers = players.filter(p => p.currentAnswerIndex !== null && p.currentAnswerIndex !== undefined);
+                            const answeredValues = answeredPlayers.map(p => isCustom ? p.currentAnswerIndex! : p.currentAnswerIndex! + 1);
+                            const avgValue = answeredValues.length > 0 ? answeredValues.reduce((a, b) => a + b, 0) / answeredValues.length : null;
+
+                            const getPct = (val: number) => {
+                              const pct = ((val - min) / (max - min)) * 100;
+                              return Math.min(100, Math.max(0, pct));
+                            };
+
+                            const correctPct = getPct(correctVal);
+                            const avgPct = avgValue !== null ? getPct(avgValue) : null;
+
+                            return (
+                              <div className="space-y-6">
+                                <p className="text-xs text-teal-400 font-bold uppercase tracking-wider">
+                                  Groepsmeting & Correct Getal (Schaal: {min.toLocaleString("nl-NL")} - {max.toLocaleString("nl-NL")}):
+                                </p>
+                                
+                                <div className="bg-slate-950/60 border border-slate-800/80 p-6 rounded-2xl relative overflow-visible mt-2">
+                                  {/* Gauge line track */}
+                                  <div className="relative h-4 bg-slate-900 border border-slate-800 rounded-full my-8">
+                                    {/* Connection zone highlight */}
+                                    {avgPct !== null && (
+                                      <div 
+                                        className="absolute h-full bg-gradient-to-r from-emerald-500/20 to-blue-500/20 rounded-full"
+                                        style={{ 
+                                          left: `${Math.min(correctPct, avgPct)}%`, 
+                                          width: `${Math.abs(correctPct - avgPct)}%` 
+                                        }}
+                                      />
+                                    )}
+
+                                    {/* Correct Value indicator marker */}
+                                    <div 
+                                      className="absolute -top-3 bottom-0 flex flex-col items-center z-20"
+                                      style={{ left: `${correctPct}%` }}
+                                    >
+                                      <div className="w-1.5 h-10 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/50" />
+                                      <div className="absolute -top-12 bg-emerald-500 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1 rounded-xl whitespace-nowrap shadow-md uppercase tracking-wider border border-emerald-400">
+                                        Juist: {correctVal.toLocaleString("nl-NL")}
+                                      </div>
+                                    </div>
+
+                                    {/* Average Value indicator marker */}
+                                    {avgValue !== null && (
+                                      <div 
+                                        className="absolute -top-3 bottom-0 flex flex-col items-center z-10"
+                                        style={{ left: `${avgPct}%` }}
+                                      >
+                                        <div className="w-1.5 h-10 bg-blue-500 rounded-full shadow-lg shadow-blue-500/30" />
+                                        <div className="absolute -bottom-12 bg-blue-500 text-white font-extrabold text-[10px] md:text-xs px-2.5 py-1 rounded-xl whitespace-nowrap shadow-md uppercase tracking-wider border border-blue-400">
+                                          Gemiddelde: {Math.round(avgValue).toLocaleString("nl-NL")}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Scatter player responses */}
+                                    {answeredPlayers.map((player, idx) => {
+                                      const pVal = isCustom ? player.currentAnswerIndex! : player.currentAnswerIndex! + 1;
+                                      const pPct = getPct(pVal);
+                                      const offsetTop = (idx % 3) * 4 - 4; // scatter vertically
+
+                                      return (
+                                        <div
+                                          key={player.id}
+                                          className="absolute w-4 h-4 rounded-full bg-teal-500/30 border border-teal-300 shadow-md flex items-center justify-center text-[8px] font-black text-white hover:scale-125 hover:z-30 transition-transform duration-200"
+                                          style={{ 
+                                            left: `${pPct}%`, 
+                                            transform: `translate(-50%, -30%)`,
+                                            marginTop: `${offsetTop}px`
+                                          }}
+                                          title={`${player.nickname}: ${pVal.toLocaleString("nl-NL")}`}
+                                        >
+                                          {player.nickname ? player.nickname.substring(0, 1).toUpperCase() : "?"}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                  <div className="w-full bg-slate-950/40 border border-slate-800 h-5 rounded-lg overflow-hidden flex">
-                                    <div
-                                      className={`h-full transition-all duration-300 ${isCorrectVal ? "bg-emerald-500" : "bg-indigo-950/60"}`}
-                                      style={{ width: `${percentage}%` }}
-                                    />
+
+                                  {/* Bounds */}
+                                  <div className="flex justify-between text-[10px] font-mono font-bold text-slate-500 pt-3">
+                                    <span>Min: {min.toLocaleString("nl-NL")}</span>
+                                    <span>Max: {max.toLocaleString("nl-NL")}</span>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
+                              </div>
+                            );
+                          }
+                        })()
                       ) : (
                         getStats().map((votes, idx) => {
                           const isCorrectOption = currentQuestion.questionType === "wheel_spin"

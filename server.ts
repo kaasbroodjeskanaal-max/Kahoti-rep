@@ -80,6 +80,24 @@ async function startServer() {
 
   app.use(express.json());
 
+  // In-memory store for session music URLs
+  const sessionMusicStore: Record<string, string> = {};
+
+  app.get("/api/session-music/:sessionId", (req, res) => {
+    const { sessionId } = req.params;
+    const musicUrl = sessionMusicStore[sessionId] || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
+    res.json({ musicUrl });
+  });
+
+  app.post("/api/session-music/:sessionId", (req, res) => {
+    const { sessionId } = req.params;
+    const { musicUrl } = req.body;
+    if (musicUrl) {
+      sessionMusicStore[sessionId] = musicUrl;
+    }
+    res.json({ success: true, musicUrl: sessionMusicStore[sessionId] || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3" });
+  });
+
   // Clean log file on boot
   try {
     fs.writeFileSync(LOG_FILE, "=== PROXY LOGS STARTED ===\n", "utf8");

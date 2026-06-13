@@ -38,6 +38,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const [imageUrl, setImageUrl] = useState("");
   const [theme, setTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
   const [lobbyTheme, setLobbyTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
+  const [lobbyMusicUrl, setLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
   const [questions, setQuestions] = useState<Omit<Question, "id">[]>([
     {
       questionText: "",
@@ -100,6 +101,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         const firstQ = qList[0];
         const quizTheme = q.theme || firstQ?.theme || "default";
         const quizLobbyTheme = q.lobby_theme || q.lobbyTheme || firstQ?.lobbyTheme || "default";
+        const quizLobbyMusicUrl = q.lobby_music_url || q.lobbyMusicUrl || firstQ?.lobbyMusicUrl || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
         return {
           id: q.id,
           title: q.title || "Naamloze Quiz",
@@ -110,6 +112,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
           questions: qList,
           theme: quizTheme,
           lobbyTheme: quizLobbyTheme,
+          lobbyMusicUrl: quizLobbyMusicUrl,
         };
       });
 
@@ -320,8 +323,10 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     const firstQ = quiz.questions[0];
     const quizTheme = quiz.theme || firstQ?.theme || "default";
     const quizLobbyTheme = quiz.lobbyTheme || firstQ?.lobbyTheme || "default";
+    const quizLobbyMusicUrl = quiz.lobbyMusicUrl || firstQ?.lobbyMusicUrl || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
     setTheme(quizTheme);
     setLobbyTheme(quizLobbyTheme);
+    setLobbyMusicUrl(quizLobbyMusicUrl);
 
     setQuestions(quiz.questions.map(q => ({
       questionText: q.questionText,
@@ -333,6 +338,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       correctOptionIndices: q.correctOptionIndices ?? [q.correctOptionIndex ?? 0],
       questionType: q.questionType ?? "multiple_choice",
       theme: quizTheme,
+      lobbyMusicUrl: quizLobbyMusicUrl,
     })));
     setActiveTab("create");
   };
@@ -388,6 +394,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         questionType: q.questionType || "multiple_choice",
         theme: theme,
         lobbyTheme: lobbyTheme,
+        lobbyMusicUrl: lobbyMusicUrl,
         id: `q_${idx}_${Date.now()}`,
       }));
 
@@ -404,6 +411,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         created_by: uId,
         created_at: new Date().toISOString(),
         questions: parsedQuestions,
+        lobby_music_url: lobbyMusicUrl,
       };
 
       if (editingQuizId) {
@@ -437,6 +445,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       setImageUrl("");
       setTheme("default");
       setLobbyTheme("default");
+      setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
       setQuestions([
         {
           questionText: "",
@@ -604,6 +613,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
             setTitle("");
             setDescription("");
             setImageUrl("");
+            setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
             setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0, correctOptionIndices: [0], questionType: "multiple_choice" }]);
             setActiveTab("create");
           }}
@@ -643,6 +653,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                     setTitle("");
                     setDescription("");
                     setImageUrl("");
+                    setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
                     setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0, correctOptionIndices: [0], questionType: "multiple_choice" }]);
                     setActiveTab("create");
                   }}
@@ -780,6 +791,19 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                   <option value="neon">⚡ Neon Retro (Synthwave)</option>
                 </select>
               </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎵 Lobby Achtergrondmuziek</label>
+              <select
+                value={lobbyMusicUrl}
+                onChange={(e) => setLobbyMusicUrl(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
+              >
+                <option value="https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3">🎵 Soundtrack 1 (Mellow - Standaard)</option>
+                <option value="https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3">🕹️ Soundtrack 2 (Retro / Arcade)</option>
+                <option value="https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3">⚡ Soundtrack 3 (Upbeat / Energiek)</option>
+              </select>
             </div>
           </div>
 
@@ -929,71 +953,145 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                   </div>
 
                   {q.questionType === "slider" ? (
-                    <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-                      {/* Scale size configuration */}
-                      <div className="space-y-2 border-b border-slate-200 dark:border-slate-800 pb-4">
-                        <span className="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">
-                          ⚙️ Pas Schaalbereik Aan (2 t/m 10):
-                        </span>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                          {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((val) => {
-                            const isCurrentMax = q.options.length === val;
-                            return (
-                              <button
-                                type="button"
-                                key={val}
-                                onClick={() => {
-                                  const newOptions = Array.from({ length: val }, (_, i) => String(i + 1));
-                                  const updated = [...questions];
-                                  updated[qIdx].options = newOptions;
-                                  // clamp correct option index if it's out of bounds
-                                  if ((updated[qIdx].correctOptionIndex ?? 2) >= val) {
-                                    updated[qIdx].correctOptionIndex = val - 1;
-                                    updated[qIdx].correctOptionIndices = [val - 1];
-                                  }
-                                  setQuestions(updated);
-                                }}
-                                className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition cursor-pointer ${
-                                  isCurrentMax
-                                    ? "bg-indigo-650 text-white border-indigo-800 shadow-md scale-105"
-                                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                }`}
-                              >
-                                1 t/m {val}
-                              </button>
-                            );
-                          })}
+                    <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-5">
+                      <span className="block text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest text-center border-b border-indigo-100 dark:border-indigo-950/40 pb-2">
+                        ⚙️ Pas Schaalbereik & Correct Getal Aan
+                      </span>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Startwaarde (Min)</label>
+                          <input
+                            type="number"
+                            value={q.sliderMin ?? 1}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const updated = [...questions];
+                              updated[qIdx].sliderMin = val;
+                              // Clamp correct value
+                              if ((updated[qIdx].correctOptionIndex ?? 2) < val) {
+                                updated[qIdx].correctOptionIndex = val;
+                              }
+                              setQuestions(updated);
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Eindwaarde (Max)</label>
+                          <input
+                            type="number"
+                            value={q.sliderMax ?? (q.options?.length || 5)}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const updated = [...questions];
+                              updated[qIdx].sliderMax = val;
+                              // Clamp correct value
+                              if ((updated[qIdx].correctOptionIndex ?? 2) > val) {
+                                updated[qIdx].correctOptionIndex = val;
+                              }
+                              setQuestions(updated);
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stapgrootte (Step)</label>
+                          <input
+                            type="number"
+                            min="0.001"
+                            value={q.sliderStep ?? 1}
+                            placeholder="bijv. 300000"
+                            onChange={(e) => {
+                              const val = Math.max(0.001, Number(e.target.value));
+                              const updated = [...questions];
+                              updated[qIdx].sliderStep = val;
+                              setQuestions(updated);
+                            }}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                          />
                         </div>
                       </div>
 
-                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium text-center">
-                        Kies het correcte getal op de schaal van 1 tot {q.options.length} door er op te klikken:
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-3 max-w-lg mx-auto py-1">
-                        {q.options.map((_, idx) => {
-                          const num = idx + 1;
-                          const isSelected = (q.correctOptionIndex ?? 2) === idx;
-                          return (
-                            <button
-                              type="button"
-                              key={num}
-                              onClick={() => {
-                                handleQuestionChange(qIdx, "correctOptionIndex", idx);
+                      <div className="bg-white dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center">
+                          Selecteer de juiste waarde op deze schaal door de balk te schuiven of de waarde direct te typen:
+                        </p>
+
+                        <div className="space-y-2 py-1">
+                          <input
+                            type="range"
+                            min={q.sliderMin ?? 1}
+                            max={q.sliderMax ?? (q.options?.length || 5)}
+                            step={q.sliderStep ?? 1}
+                            value={q.correctOptionIndex ?? 3}
+                            onChange={(e) => {
+                              handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
+                            }}
+                            className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                          />
+                          <div className="flex justify-between text-[10px] font-mono text-slate-400 font-black px-1">
+                            <span>Min: {(q.sliderMin ?? 1).toLocaleString("nl-NL")}</span>
+                            <span>Max: {(q.sliderMax ?? (q.options?.length || 5)).toLocaleString("nl-NL")}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center justify-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Correct Getal:</span>
+                            <input
+                              type="number"
+                              min={q.sliderMin ?? 1}
+                              max={q.sliderMax ?? (q.options?.length || 5)}
+                              step={q.sliderStep ?? 1}
+                              value={q.correctOptionIndex ?? 3}
+                              onChange={(e) => {
+                                handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
                               }}
-                              className={`w-11 h-11 rounded-full font-bold flex items-center justify-center border-2 transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-indigo-650 border-indigo-800 text-white shadow-lg scale-110"
-                                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                              }`}
-                            >
-                              {num}
-                            </button>
-                          );
-                        })}
+                              className="w-36 px-3 py-1.5 border border-indigo-200 dark:border-indigo-900 text-center font-extrabold text-sm bg-indigo-50/20 text-indigo-750 dark:text-indigo-400 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs"
+                            />
+                          </div>
+                          
+                          {/* Render visual dot helpers only if the scale range has <= 15 values */}
+                          {(() => {
+                            const minVal = q.sliderMin ?? 1;
+                            const maxVal = q.sliderMax ?? (q.options?.length || 5);
+                            const stepVal = q.sliderStep ?? 1;
+                            const rangeCount = Math.floor((maxVal - minVal) / stepVal) + 1;
+                            
+                            if (rangeCount > 0 && rangeCount <= 15) {
+                              const dots = [];
+                              for (let v = minVal; v <= maxVal; v += stepVal) {
+                                dots.push(v);
+                              }
+                              return (
+                                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-sm">
+                                  {dots.map((val) => {
+                                    const isSelected = q.correctOptionIndex === val;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={val}
+                                        onClick={() => {
+                                          handleQuestionChange(qIdx, "correctOptionIndex", val);
+                                        }}
+                                        className={`px-2 py-1 rounded-lg font-bold text-[10px] border transition-all cursor-pointer ${
+                                          isSelected
+                                            ? "bg-indigo-650 border-indigo-700 text-white shadow-xs scale-105"
+                                            : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-305 hover:bg-slate-100"
+                                        }`}
+                                      >
+                                        {val}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </div>
-                      <p className="text-xs text-indigo-500 text-center font-bold">
-                        Geselecteerde juiste waarde: {(q.correctOptionIndex ?? 2) + 1}
-                      </p>
                     </div>
                   ) : q.questionType === "puzzle" ? (
                     <div className="space-y-3">
