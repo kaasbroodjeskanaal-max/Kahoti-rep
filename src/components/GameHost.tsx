@@ -45,6 +45,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [countdownVal, setCountdownVal] = useState<number | string>(3);
   const [isSkippingLeaderboard, setIsSkippingLeaderboard] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const isFetchingSessionAndPlayersRef = useRef(false);
 
   // States & ref for background lobby music
@@ -520,7 +521,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   // 4. Custom State Progression Actions
   const handleStartSpel = async () => {
-    if (!sessionId || !currentQuestion) return;
+    if (!sessionId || !currentQuestion || isTransitioning) return;
+    setIsTransitioning(true);
+    processedQuestionIndexRef.current = null;
     try {
       // Optimistic state update to countdown instantly on screen
       setSession((prev) => prev ? { ...prev, status: "countdown" } : null);
@@ -532,36 +535,43 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
       // Quick countdown delay on big screen
       setTimeout(async () => {
-        // Bulk reset player answer inputs for the first question
-        await supabase
-          .from("players")
-          .update({
-            current_answer_index: null,
-            current_answer_time: null,
-          })
-          .eq("session_id", sessionId);
+        try {
+          // Bulk reset player answer inputs for the first question
+          await supabase
+            .from("players")
+            .update({
+              current_answer_index: null,
+              current_answer_time: null,
+            })
+            .eq("session_id", sessionId);
 
-        const startTime = new Date().toISOString();
+          const startTime = new Date().toISOString();
 
-        // Optimistic state update to question instantly on screen
-        setSession((prev) => prev ? {
-          ...prev,
-          status: "question",
-          questionStartTime: startTime,
-          questionDuration: currentQuestion.timeLimit,
-        } : null);
-
-        await supabase
-          .from("sessions")
-          .update({
+          // Optimistic state update to question instantly on screen
+          setSession((prev) => prev ? {
+            ...prev,
             status: "question",
-            question_start_time: startTime,
-            question_duration: currentQuestion.timeLimit,
-          })
-          .eq("id", sessionId);
+            questionStartTime: startTime,
+            questionDuration: currentQuestion.timeLimit,
+          } : null);
+
+          await supabase
+            .from("sessions")
+            .update({
+              status: "question",
+              question_start_time: startTime,
+              question_duration: currentQuestion.timeLimit,
+            })
+            .eq("id", sessionId);
+        } catch (err) {
+          console.error("Fout bij starten vraag:", err);
+        } finally {
+          setIsTransitioning(false);
+        }
       }, 4000);
     } catch (err) {
       console.error(err);
+      setIsTransitioning(false);
     }
   };
 
@@ -639,8 +649,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   };
 
   const handleSkipLeaderboard = async () => {
-    if (!sessionId || !currentQuestion || !session) return;
+    if (!sessionId || !currentQuestion || !session || isTransitioning) return;
     setIsSkippingLeaderboard(true);
+    setIsTransitioning(true);
     try {
       // Progress immediately as player scores are already processed
       const nextIdx = session.currentQuestionIndex + 1;
@@ -652,6 +663,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .from("sessions")
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
+        setIsTransitioning(false);
       } else {
         const nextQ = quiz.questions[nextIdx];
 
@@ -681,37 +693,45 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .eq("id", sessionId);
 
         setTimeout(async () => {
-          const startTime = new Date().toISOString();
+          try {
+            const startTime = new Date().toISOString();
 
-          // Optimistic state update to question instantly on screen
-          setSession((prev) => prev ? {
-            ...prev,
-            status: "question",
-            questionStartTime: startTime,
-            questionDuration: nextQ.timeLimit,
-          } : null);
-
-          await supabase
-            .from("sessions")
-            .update({
+            // Optimistic state update to question instantly on screen
+            setSession((prev) => prev ? {
+              ...prev,
               status: "question",
-              question_start_time: startTime,
-            })
-            .eq("id", sessionId);
+              questionStartTime: startTime,
+              questionDuration: nextQ.timeLimit,
+            } : null);
+
+            await supabase
+              .from("sessions")
+              .update({
+                status: "question",
+                question_start_time: startTime,
+              })
+              .eq("id", sessionId);
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setIsTransitioning(false);
+          }
         }, 4000);
       }
     } catch (err) {
       console.error("Fout tijdens overslaan van leaderboard:", err);
+      setIsTransitioning(false);
     } finally {
       setIsSkippingLeaderboard(false);
     }
   };
 
   const handleNextQuestion = async () => {
-    if (!session || !sessionId) return;
+    if (!session || !sessionId || isTransitioning) return;
     const nextIdx = session.currentQuestionIndex + 1;
     const isLast = nextIdx >= quiz.questions.length;
 
+    setIsTransitioning(true);
     try {
       if (isLast) {
         setSession((prev) => prev ? { ...prev, status: "ended", currentQuestionIndex: 0 } : null);
@@ -719,6 +739,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .from("sessions")
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
+        setIsTransitioning(false);
       } else {
         const nextQ = quiz.questions[nextIdx];
 
@@ -749,27 +770,34 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .eq("id", sessionId);
 
         setTimeout(async () => {
-          const startTime = new Date().toISOString();
+          try {
+            const startTime = new Date().toISOString();
 
-          // Optimistic state update to question instantly on screen
-          setSession((prev) => prev ? {
-            ...prev,
-            status: "question",
-            question_start_time: startTime,
-            questionDuration: nextQ.timeLimit,
-          } : null);
-
-          await supabase
-            .from("sessions")
-            .update({
+            // Optimistic state update to question instantly on screen
+            setSession((prev) => prev ? {
+              ...prev,
               status: "question",
-              question_start_time: startTime,
-            })
-            .eq("id", sessionId);
+              questionStartTime: startTime,
+              questionDuration: nextQ.timeLimit,
+            } : null);
+
+            await supabase
+              .from("sessions")
+              .update({
+                status: "question",
+                question_start_time: startTime,
+              })
+              .eq("id", sessionId);
+          } catch (err) {
+            console.error("Fout bij tonen volgende vraag:", err);
+          } finally {
+            setIsTransitioning(false);
+          }
         }, 4000);
       }
     } catch (err) {
       console.error(err);
+      setIsTransitioning(false);
     }
   };
 

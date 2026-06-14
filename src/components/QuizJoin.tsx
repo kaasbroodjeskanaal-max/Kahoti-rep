@@ -793,6 +793,11 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                 className="w-full text-center text-lg font-bold px-4 py-4 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950/50 dark:focus:bg-slate-900 text-slate-900 dark:text-white shadow-inner"
                 disabled={isLoading}
               />
+              <p className="mt-3 text-center text-[11px] text-slate-500 leading-normal max-w-[340px] mx-auto">
+                ⚠️ {lang === "nl" 
+                  ? "Spelregel: Gebruik je eigen naam (herkenbaar als jij) en cheaten is streng verboden!" 
+                  : "Rule: Use your own name (recognizable as you) and cheating is strictly forbidden!"}
+              </p>
             </div>
 
             {error && (
