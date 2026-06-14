@@ -295,16 +295,20 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       }
 
       if (!pErr && playersData) {
-        const list: Player[] = playersData.map((p: any) => ({
-          id: p.id,
-          nickname: p.nickname,
-          score: p.score ?? 0,
-          streak: p.streak ?? 0,
-          currentAnswerIndex: p.current_answer_index,
-          currentAnswerTime: p.current_answer_time,
-          isHost: p.is_host,
-          joinedAt: p.joined_at,
-        }));
+        const currentStatus = sessionData?.status || session?.status;
+        const list: Player[] = playersData.map((p: any) => {
+          const isLobbyOrCountdown = currentStatus === "lobby" || currentStatus === "countdown";
+          return {
+            id: p.id,
+            nickname: p.nickname,
+            score: p.score ?? 0,
+            streak: p.streak ?? 0,
+            currentAnswerIndex: isLobbyOrCountdown ? null : p.current_answer_index,
+            currentAnswerTime: isLobbyOrCountdown ? null : p.current_answer_time,
+            isHost: p.is_host,
+            joinedAt: p.joined_at,
+          };
+        });
         setPlayers(list);
       }
     } catch (err) {
@@ -447,10 +451,28 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   // Auto transition to SHOW_ANSWER if everyone has responded
   useEffect(() => {
     if (session?.status === "question" && totalActives > 0 && answeredCount === totalActives) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      autoTransitionToAnswer();
+      // Prevent stale state auto-transitions by requiring that at least 1.5 seconds (1500ms)
+      // have elapsed since the question actually started.
+      const startTime = session.questionStartTime ? new Date(session.questionStartTime).getTime() : 0;
+      const elapsed = startTime ? Date.now() - startTime : 0;
+
+      if (elapsed < 1500) {
+        // If everyone answered in under 1.5s, wait until the 1.5s mark to transition
+        const remainingDelay = Math.max(0, 1500 - elapsed);
+        const timerId = setTimeout(() => {
+          // Double check conditions after safety grace period
+          if (session?.status === "question" && totalActives > 0 && answeredCount === totalActives) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            autoTransitionToAnswer();
+          }
+        }, remainingDelay);
+        return () => clearTimeout(timerId);
+      } else {
+        if (timerRef.current) clearInterval(timerRef.current);
+        autoTransitionToAnswer();
+      }
     }
-  }, [answeredCount, totalActives, session?.status]);
+  }, [answeredCount, totalActives, session?.status, session?.questionStartTime]);
 
   const autoTransitionToAnswer = async () => {
     if (!sessionId || !currentQuestion || !session) return;
