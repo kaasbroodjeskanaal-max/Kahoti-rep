@@ -4,8 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 // Decoded dynamically at runtime using secure client methods, falling back to env overrides.
 const getObfuscatedUrl = (): string => {
   if (typeof window !== 'undefined') {
+    const hn = window.location.hostname;
     // Route HTTP REST and auth requests through our same-origin Express server proxy
-    return window.location.origin + '/api/supabase';
+    // only if we are in the development container, shared Cloud Run environment, or localhost.
+    // If deployed elsewhere (e.g. Vercel), connect directly to the Supabase endpoint to prevent 404 errors.
+    const isLocalOrContainer = hn === 'localhost' || hn === '127.0.0.1' || hn.endsWith('.run.app') || hn.includes('gitpod') || hn.includes('github.dev');
+    if (isLocalOrContainer) {
+      return window.location.origin + '/api/supabase/';
+    }
   }
   const encodedFallback = 'YUhSMGNITTZMeTl0YlhwMFpIVmtlWHAwWm5aMmIyOWlkR04zZUM1emRYQmhZbUZ6WlM1amJ3PT0='; // Correct double-base64 url fallback
   try {

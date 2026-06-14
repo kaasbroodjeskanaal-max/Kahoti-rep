@@ -104,16 +104,21 @@ async function startServer() {
   } catch {}
 
   // Same-Origin Reverse Proxy for Supabase REST (Postgrest) and Authentication
-  app.all("/api/supabase/*", async (req, res) => {
-    // Extract the relative path and query string from req.url
-    const relativePart = req.url.replace(/^\/api\/supabase/, "");
+  app.all(["/api/supabase/*", "/api/supabase", "/rest/v1/*", "/auth/v1/*"], async (req, res) => {
+    // Extract the relative path and query string from req.originalUrl to be highly robust and avoid middleware modifications
+    let relativePart = req.originalUrl;
+    if (relativePart.startsWith("/api/supabase")) {
+      relativePart = relativePart.slice("/api/supabase".length);
+    }
     
-    // Security check 1: Ensure path begins with a slash to preserve relative URL scope
+    // Ensure relativePart starts with a slash
     if (relativePart && !relativePart.startsWith("/")) {
-      return res.status(400).json({ error: "Invalid path format: must start with a slash" });
+      relativePart = "/" + relativePart;
+    } else if (!relativePart) {
+      relativePart = "/";
     }
 
-    // Security check 2: Strict prevention of directory traversal attacks escaping the sub-path
+    // Security check: Strict prevention of directory traversal attacks escaping the sub-path
     if (relativePart.includes("../") || relativePart.includes("..\\")) {
       return res.status(400).json({ error: "Path traversal attempt detected" });
     }
