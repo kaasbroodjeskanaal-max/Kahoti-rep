@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kahoti-pwa-cache-v1';
+const CACHE_NAME = 'kahoti-pwa-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -46,10 +46,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Check if it is a navigation/HTML document request (e.g. /, /index.html)
+  const isNavigate = event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/';
+
+  if (isNavigate) {
+    // Elegant Network-First Strategy for HTML/Navigate: Always try to get the newest page from network online
+    // to ensure the user gets the latest asset hashes and doesn't load a cached 404 JS bundle chunk.
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // If network fails (e.g. offline), fall back to cached document
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            // Absolute offline shell fallback
+            return caches.match('/');
+          });
+        })
+    );
+    return;
+  }
+
+  // Stale-While-Revalidate for sub-resources (JS, CSS, assets, images)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch background update
+        // Fetch background update to keep local assets primed
         fetch(event.request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
@@ -74,9 +104,7 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
+          // Silent catch for offline image/asset failures
         });
     })
   );
