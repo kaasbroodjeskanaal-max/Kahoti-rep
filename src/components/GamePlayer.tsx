@@ -132,14 +132,14 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     };
   }, []);
 
-  // Audio elements for 10s and 20s questions
+  // Audio elements for questions playing music
   const questionAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const isQuestionActive = session?.status === "question";
     const timeLimit = activeQuestion?.timeLimit;
 
-    if (isQuestionActive && (timeLimit === 10 || timeLimit === 20)) {
+    if (isQuestionActive) {
       const url = timeLimit === 10
         ? "https://www.image2url.com/r2/default/audio/1781202021800-73412b16-d558-4596-828e-b1fff5e7170a.mp3"
         : "https://www.image2url.com/r2/default/audio/1781202394272-3a6b2a52-a005-4588-9d46-de96327a7bcd.mp3";
@@ -150,7 +150,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       }
 
       const audio = new Audio(url);
-      audio.loop = false;
+      audio.loop = true; // Loop the question track nicely so it continues through long question timers
       questionAudioRef.current = audio;
 
       const playPromise = audio.play();
@@ -1105,7 +1105,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                         animate={{ scale: 1, opacity: 1 }}
                         className="px-6 h-24 min-w-[7rem] rounded-3xl bg-teal-500 text-white text-3xl md:text-3xl font-black font-display flex flex-col items-center justify-center shadow-lg shadow-teal-500/25 border-4 border-white relative"
                       >
-                        <span>{sliderVal?.toLocaleString("nl-NL")}</span>
+                        <span>{parseFloat(Number(sliderVal).toFixed(4)).toLocaleString("nl-NL")}</span>
                         <div className="absolute -bottom-2 bg-black text-white text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest leading-none border border-teal-500/30">
                           Gekozen
                         </div>
@@ -1197,7 +1197,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                       }}
                       className="w-full bg-teal-600 hover:bg-teal-500 text-white font-display font-black py-4 rounded-2xl border-b-6 border-teal-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
                     >
-                      Bevestig Getal ({sliderVal?.toLocaleString("nl-NL")}) ⭐
+                      Bevestig Getal ({parseFloat(Number(sliderVal).toFixed(4)).toLocaleString("nl-NL")}) ⭐
                     </button>
                   </div>
                 ) : (

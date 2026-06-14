@@ -1,7 +1,11 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+import {initSecureStorage} from './secureStorage.ts';
 import App from './App.tsx';
 import './index.css';
+
+// Initialize transparent storage encryption
+initSecureStorage();
 
 // Safely catch and suppress benign WebSocket connection rejections in the sandbox preview
 if (typeof window !== "undefined") {

@@ -47,12 +47,15 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const [isSkippingLeaderboard, setIsSkippingLeaderboard] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isFetchingSessionAndPlayersRef = useRef(false);
+  const isProcessingTransitionRef = useRef(false);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // States & ref for background lobby music
   const [selectedLobbyMusicUrl, setSelectedLobbyMusicUrl] = useState(() => {
     return quiz.lobbyMusicUrl || quiz.questions?.[0]?.lobbyMusicUrl || "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3";
   });
   const lobbyAudioRef = useRef<HTMLAudioElement | null>(null);
+  const questionAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -123,6 +126,10 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       if (lobbyAudioRef.current) {
         lobbyAudioRef.current.pause();
         lobbyAudioRef.current = null;
+      }
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
       }
     };
   }, []);
@@ -250,7 +257,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   // Dual-Layer Synchronisation: Realtime Channel + Periodic Polling (Guarantees reliability)
   const fetchSessionAndPlayers = async () => {
-    if (!sessionId || isFetchingSessionAndPlayersRef.current) return;
+    if (!sessionId || isFetchingSessionAndPlayersRef.current || isProcessingTransitionRef.current) return;
     try {
       isFetchingSessionAndPlayersRef.current = true;
 
@@ -311,31 +318,87 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     if (!sessionId) return;
 
     fetchSessionAndPlayers();
-    const interval = setInterval(fetchSessionAndPlayers, 1500);
 
-    // Dynamic Realtime connection
+    const debouncedFetch = () => {
+      if (isProcessingTransitionRef.current) return;
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchSessionAndPlayers();
+      }, 100);
+    };
+
+    const interval = setInterval(() => {
+      debouncedFetch();
+    }, 1500);
+
+    // Dynamic Realtime connection with debouncing to prevent firehose congestion
     const realtimeChannel = supabase
       .channel(`session-host-${sessionId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sessions", filter: `id=eq.${sessionId}` },
-        () => fetchSessionAndPlayers()
+        () => debouncedFetch()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "players", filter: `session_id=eq.${sessionId}` },
-        () => fetchSessionAndPlayers()
+        () => debouncedFetch()
       )
       .subscribe();
 
     return () => {
       clearInterval(interval);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
       supabase.removeChannel(realtimeChannel);
     };
   }, [sessionId]);
 
   // 3. Game State Managers & Clock Counters
   const currentQuestion = session ? quiz.questions[session.currentQuestionIndex] : null;
+
+  useEffect(() => {
+    const isQuestionActive = session?.status === "question";
+    const timeLimit = currentQuestion?.timeLimit;
+
+    if (isQuestionActive) {
+      const url = timeLimit === 10
+        ? "https://www.image2url.com/r2/default/audio/1781202021800-73412b16-d558-4596-828e-b1fff5e7170a.mp3"
+        : "https://www.image2url.com/r2/default/audio/1781202394272-3a6b2a52-a005-4588-9d46-de96327a7bcd.mp3";
+
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+
+      const audio = new Audio(url);
+      audio.loop = true; // Use loop so background track continues gracefully if the duration is long
+      questionAudioRef.current = audio;
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Question audio autoplay blocked or failed for host:", err);
+        });
+      }
+    } else {
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+    }
+
+    return () => {
+      if (questionAudioRef.current) {
+        questionAudioRef.current.pause();
+        questionAudioRef.current = null;
+      }
+    };
+  }, [session?.status, session?.currentQuestionIndex, currentQuestion?.timeLimit]);
+
   const firstQ = quiz.questions[0];
 
   const hostTheme = quiz.theme || firstQ?.theme || "default";
@@ -397,6 +460,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       return;
     }
     processedQuestionIndexRef.current = session.currentQuestionIndex;
+    isProcessingTransitionRef.current = true;
 
     try {
       // Fetch latest players directly from database to prevent batch state lagging
@@ -516,6 +580,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         .eq("id", sessionId);
     } catch (err) {
       console.error("Fout tijdens autoTransitionToAnswer:", err);
+    } finally {
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     }
   };
 
@@ -524,6 +591,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     if (!sessionId || !currentQuestion || isTransitioning) return;
     setIsTransitioning(true);
     processedQuestionIndexRef.current = null;
+    isProcessingTransitionRef.current = true;
     try {
       // Optimistic state update to countdown instantly on screen
       setSession((prev) => prev ? { ...prev, status: "countdown" } : null);
@@ -567,11 +635,15 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           console.error("Fout bij starten vraag:", err);
         } finally {
           setIsTransitioning(false);
+          isProcessingTransitionRef.current = false;
+          fetchSessionAndPlayers();
         }
       }, 4000);
     } catch (err) {
       console.error(err);
       setIsTransitioning(false);
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     }
   };
 
@@ -638,6 +710,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   const handleGoToLeaderboard = async () => {
     if (!sessionId) return;
+    isProcessingTransitionRef.current = true;
     try {
       await supabase
         .from("sessions")
@@ -645,6 +718,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         .eq("id", sessionId);
     } catch (err) {
       console.error(err);
+    } finally {
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     }
   };
 
@@ -652,6 +728,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     if (!sessionId || !currentQuestion || !session || isTransitioning) return;
     setIsSkippingLeaderboard(true);
     setIsTransitioning(true);
+    isProcessingTransitionRef.current = true;
     try {
       // Progress immediately as player scores are already processed
       const nextIdx = session.currentQuestionIndex + 1;
@@ -664,6 +741,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
         setIsTransitioning(false);
+        isProcessingTransitionRef.current = false;
+        fetchSessionAndPlayers();
       } else {
         const nextQ = quiz.questions[nextIdx];
 
@@ -715,12 +794,16 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             console.error(err);
           } finally {
             setIsTransitioning(false);
+            isProcessingTransitionRef.current = false;
+            fetchSessionAndPlayers();
           }
         }, 4000);
       }
     } catch (err) {
       console.error("Fout tijdens overslaan van leaderboard:", err);
       setIsTransitioning(false);
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     } finally {
       setIsSkippingLeaderboard(false);
     }
@@ -732,6 +815,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     const isLast = nextIdx >= quiz.questions.length;
 
     setIsTransitioning(true);
+    isProcessingTransitionRef.current = true;
     try {
       if (isLast) {
         setSession((prev) => prev ? { ...prev, status: "ended", currentQuestionIndex: 0 } : null);
@@ -740,6 +824,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
         setIsTransitioning(false);
+        isProcessingTransitionRef.current = false;
+        fetchSessionAndPlayers();
       } else {
         const nextQ = quiz.questions[nextIdx];
 
@@ -792,17 +878,22 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             console.error("Fout bij tonen volgende vraag:", err);
           } finally {
             setIsTransitioning(false);
+            isProcessingTransitionRef.current = false;
+            fetchSessionAndPlayers();
           }
         }, 4000);
       }
     } catch (err) {
       console.error(err);
       setIsTransitioning(false);
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     }
   };
 
   const handleFinishQuiz = async () => {
     if (!sessionId) return;
+    isProcessingTransitionRef.current = true;
     try {
       await supabase
         .from("sessions")
@@ -810,6 +901,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         .eq("id", sessionId);
     } catch (err) {
       console.error(err);
+    } finally {
+      isProcessingTransitionRef.current = false;
+      fetchSessionAndPlayers();
     }
   };
 
@@ -1398,11 +1492,14 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             {/* Render up to 7 values for neat scale preview, else show a beautiful horizontal track */}
                             {rangeCount <= 7 ? (
                               <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-800 mt-2 px-6 font-mono font-bold text-slate-300">
-                                {Array.from({ length: rangeCount }, (_, i) => min + i * step).map((num) => (
-                                  <span key={num} className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-sm shadow-sm font-extrabold text-white">
-                                    {num}
-                                  </span>
-                                ))}
+                                {Array.from({ length: rangeCount }, (_, i) => min + i * step).map((num) => {
+                                  const cleanedNum = parseFloat(num.toFixed(4));
+                                  return (
+                                    <span key={num} className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-sm shadow-sm font-extrabold text-white">
+                                      {cleanedNum.toLocaleString("nl-NL")}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <div className="relative h-12 bg-slate-950 rounded-2xl border border-slate-850 my-6 flex items-center justify-between px-5 text-xs font-mono font-bold text-slate-400">
@@ -1545,7 +1642,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             // Render standard individual bar cards for small scales
                             const dots: number[] = [];
                             for (let v = min; v <= max; v += step) {
-                              dots.push(v);
+                              dots.push(parseFloat(v.toFixed(4)));
                             }
 
                             return (

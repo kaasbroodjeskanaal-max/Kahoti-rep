@@ -1062,7 +1062,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                             if (rangeCount > 0 && rangeCount <= 15) {
                               const dots = [];
                               for (let v = minVal; v <= maxVal; v += stepVal) {
-                                dots.push(v);
+                                dots.push(parseFloat(v.toFixed(4)));
                               }
                               return (
                                 <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-sm">
