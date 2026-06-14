@@ -28,7 +28,7 @@ export const translations = {
     termsDesc: "Door Kahoti te gebruiken, stemt u ermee in het platform op een respectvolle manier te gebruiken. Misbruik, haatzaaien of het gebruik van ongepaste namen kan leiden tot directe verwijdering uit de sessie. Wij sturen op een leuke en veilige omgeving voor iedereen.",
     rules: "Spelregels",
     rulesTitle: "Spelregels van Kahoti",
-    rulesDesc: "1. Vragen hebben een tijdslimiet.\n2. Meerdere opeenvolgende juiste antwoorden leveren een Streak Bonus op!\n3. Het type vraag bepaalt de score: wees precies in de open vragen of snel bij een puzzel.\n4. Hou het gezellig!",
+    rulesDesc: "1. Vragen hebben een tijdslimiet.\n2. Meerdere opeenvolgende juiste antwoorden leveren een Streak Bonus op!\n3. Het type vraag bepaalt de score: wees precies in de open vragen of snel bij een puzzel.\n4. Spelen zonder hulpmiddelen: cheaten is absoluut verboden!\n5. Gebruik altijd je eigen naam zodat het direct herkenbaar is dat jij het bent.\n6. Hou het gezellig!",
     footer: "Kahoti. Gebouwd met Supabase & PostgreSQL.",
     
     // Theme
@@ -137,7 +137,7 @@ export const translations = {
     termsDesc: "By using Kahoti, you agree to use the platform respectfully. Abuse, hate speech or inappropriate names may result in immediate ban from the session. We strive for a fun and secure environment for everyone.",
     rules: "Game Rules",
     rulesTitle: "Kahoti Game Rules",
-    rulesDesc: "1. Questions have a time limit.\n2. Consecutive correct answers award a Streak Bonus!\n3. The question type determines scoring strategy: be precise in open answers or fast with puzzles.\n4. Keep it friendly!",
+    rulesDesc: "1. Questions have a time limit.\n2. Consecutive correct answers award a Streak Bonus!\n3. The question type determines scoring strategy: be precise in open answers or fast with puzzles.\n4. Play fair: cheating is strictly forbidden!\n5. Always use your real name so it is recognizable to everyone that you are you.\n6. Keep it friendly!",
     footer: "Kahoti. Powered by Supabase & PostgreSQL.",
     
     // Theme
