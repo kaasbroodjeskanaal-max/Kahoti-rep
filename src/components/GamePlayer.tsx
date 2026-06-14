@@ -512,7 +512,21 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     }
 
     const touch = e.touches[0];
+    
+    // Find the element currently being touched/dragged
+    const draggedElement = document.querySelector(`[data-puzzle-idx="${draggedIdx}"]`) as HTMLElement;
+    let originalPointerEvents = "";
+    if (draggedElement) {
+      originalPointerEvents = draggedElement.style.pointerEvents;
+      draggedElement.style.pointerEvents = "none";
+    }
+
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    if (draggedElement) {
+      draggedElement.style.pointerEvents = originalPointerEvents;
+    }
+
     if (!element) return;
 
     const cardElement = element.closest("[data-puzzle-idx]");
@@ -1018,7 +1032,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                               data-puzzle-idx={idx}
                               className={`flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r ${cardColor} shadow-md border ${
                                 isBeingDragged ? "border-purple-300 shadow-purple-500/30" : "border-white/10"
-                              } cursor-grab active:cursor-grabbing transition-shadow hover:shadow-lg`}
+                              } cursor-grab active:cursor-grabbing touch-none transition-shadow hover:shadow-lg`}
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                 <span className="text-white/40 hover:text-white transition-colors p-1 shrink-0 select-none">
