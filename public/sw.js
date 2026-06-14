@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kahoti-pwa-cache-v2';
+const CACHE_NAME = 'kahoti-pwa-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -36,13 +36,22 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+  const url = new URL(event.request.url);
+
+  // Strictly skip the API endpoints (e.g. server API routes, proxies, Supabase endpoints)
+  // We use event.respondWith(fetch(event.request)) rather than a naked "return" to bypass same-origin WebKit bugs
+  // where requests with custom headers (like apikey, authorization) are abruptly aborted/dropped with "TypeError: Load failed".
+  if (
+    url.pathname.startsWith('/api') || 
+    url.pathname.includes('supabase') || 
+    url.pathname.startsWith('/rest/v1') || 
+    url.pathname.startsWith('/auth/v1')
+  ) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
-  const url = new URL(event.request.url);
-  // Strictly skip the API endpoints (e.g. server API routes, proxies)
-  if (url.pathname.startsWith('/api') || url.pathname.includes('supabase')) {
+  if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
