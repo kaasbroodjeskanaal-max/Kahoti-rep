@@ -963,6 +963,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                           <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Startwaarde (Min)</label>
                           <input
                             type="number"
+                            step="any"
                             value={q.sliderMin ?? 1}
                             onChange={(e) => {
                               const val = Number(e.target.value);
@@ -981,6 +982,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                           <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Eindwaarde (Max)</label>
                           <input
                             type="number"
+                            step="any"
                             value={q.sliderMax ?? (q.options?.length || 5)}
                             onChange={(e) => {
                               const val = Number(e.target.value);
@@ -1000,8 +1002,9 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                           <input
                             type="number"
                             min="0.001"
+                            step="any"
                             value={q.sliderStep ?? 1}
-                            placeholder="bijv. 300000"
+                            placeholder="bijv. 300005"
                             onChange={(e) => {
                               const val = Math.max(0.001, Number(e.target.value));
                               const updated = [...questions];
@@ -1043,7 +1046,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                               type="number"
                               min={q.sliderMin ?? 1}
                               max={q.sliderMax ?? (q.options?.length || 5)}
-                              step={q.sliderStep ?? 1}
+                              step="any"
                               value={q.correctOptionIndex ?? 3}
                               onChange={(e) => {
                                 handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders } from "lucide-react";
+import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
@@ -962,6 +962,32 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     } catch (err) {
       console.error("Error updating reveal stage:", err);
     }
+  };
+
+  const downloadCSV = () => {
+    const csvContent = [
+      ["Plaats", "Speler", "Score (punten)", "Streak"].map(header => `"${header.replace(/"/g, '""')}"`).join(","),
+      ...sortedPlayers.map((player, idx) => {
+        const { displayName } = parseNicknameAndAvatar(player.nickname || "");
+        return [
+          idx + 1,
+          `"${(displayName || "").replace(/"/g, '""')}"`,
+          player.score ?? 0,
+          player.streak ?? 0
+        ].join(",");
+      })
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const quizTitleClean = (quiz.title || "quiz").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    link.setAttribute("download", `eindstand_${quizTitleClean}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleRevealAll = async () => {
@@ -2229,14 +2255,22 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="text-left space-y-8 max-w-4xl mx-auto px-4 pb-12 animate-fade-in text-slate-200">
                       {/* Section 1: All Player Points Overview */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                        <div className="flex justify-between items-center border-b border-slate-850 pb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-850 pb-4">
                           <div>
                             <h2 className="text-lg font-bold font-display text-white">Eindstand Spelers</h2>
                             <p className="text-xs text-slate-400 mt-0.5">Snel overzicht van alle scores en placements</p>
                           </div>
-                          <span className="bg-indigo-950/40 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-900 font-mono">
-                            {sortedPlayers.length} Spelers
-                          </span>
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              onClick={downloadCSV}
+                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 border border-indigo-500 hover:shadow-lg shadow-indigo-600/10 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download CSV
+                            </button>
+                            <span className="bg-indigo-950/40 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-900 font-mono shrink-0">
+                              {sortedPlayers.length} Spelers
+                            </span>
+                          </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2390,10 +2424,16 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     </div>
                   )}
 
-                  <div className="max-w-md mx-auto pt-4">
+                  <div className="max-w-xl mx-auto pt-4 flex flex-col sm:flex-row gap-4 px-4">
+                    <button
+                      onClick={downloadCSV}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-4 px-5 rounded-xl font-bold transition cursor-pointer flex items-center justify-center gap-2 border border-indigo-500 shadow-lg shadow-indigo-600/15"
+                    >
+                      <Download className="w-5 h-5" /> Download Scores (CSV)
+                    </button>
                     <button
                       onClick={onExit}
-                      className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-4 rounded-xl font-bold transition cursor-pointer"
+                      className="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white py-4 px-5 rounded-xl font-bold transition cursor-pointer"
                     >
                       Terug naar Dashboard
                     </button>

@@ -1155,7 +1155,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                               type="number"
                               min={min}
                               max={max}
-                              step={step}
+                              step="any"
                               value={sliderVal}
                               onChange={(e) => {
                                 let val = Number(e.target.value);
