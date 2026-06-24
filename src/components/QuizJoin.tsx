@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
 import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl, parseQuizTitle } from "../avatarUtils";
 import { translations } from "../translations";
+import { sfx } from "../soundManager";
 
 // Fun Dutch character personality tags to make customization incredibly delightful!
 export const BASE_DESCRIPTIONS: Record<string, string> = {
@@ -342,6 +343,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       }
 
       localStorage.setItem("last_quiz_join_time", String(Date.now()));
+      sfx.playJoinRoom();
       onJoined(targetSessionId, combinedNickname);
     } catch (err: any) {
       console.error(err);
@@ -354,68 +356,126 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
   return (
     <div className="w-full max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-[75vh] relative z-10 w-full animate-fade-in">
       {/* Decorative Brand with Logo */}
-      <div className="relative mb-6 flex justify-center mt-8">
-        <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full scale-125 animate-pulse" style={{ animationDuration: '4s' }} />
-        <div className="relative w-28 h-28 bg-purple-600 rounded-3xl flex items-center justify-center shadow-xl shadow-purple-600/30 border-4 border-white dark:border-[#050505] transform -rotate-3 hover:rotate-0 transition-transform duration-300">
-           <Sparkles className="w-12 h-12 text-white" />
+      <div className="relative mb-8 flex justify-center mt-6">
+        <div className="absolute inset-0 bg-purple-500/30 blur-3xl rounded-full scale-125 animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="relative w-32 h-32 bg-gradient-to-tr from-purple-600 to-fuchsia-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-purple-600/30 border-4 border-white dark:border-[#0c0d12] transform -rotate-6 hover:rotate-0 hover:scale-105 transition-all duration-300">
+           <Sparkles className="w-14 h-14 text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]" />
         </div>
       </div>
 
-      <h1 className="text-4xl md:text-5xl font-extrabold font-display tracking-tight text-center mb-10 text-slate-900 dark:text-white drop-shadow-sm">
-        Kahoti
+      <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-center mb-8 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-sm">
+        Kahoti Play
       </h1>
 
-      <div className="w-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-[2.5rem] p-8 shadow-2xl shadow-purple-900/10 dark:shadow-purple-900/20 border border-slate-200/50 dark:border-slate-800/80 relative overflow-hidden">
-        {/* Subtle decorative strip */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-violet-500 to-indigo-500" />
+      <div className="w-full bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] p-8 shadow-2xl shadow-purple-900/10 dark:shadow-purple-900/30 border border-slate-200/50 dark:border-slate-800/80 relative overflow-hidden">
+        {/* Decorative modern indicator bar */}
+        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-indigo-500" />
 
         {step === "code" ? (
           /* STEP 1: ENTER CODE */
           <form onSubmit={handleValidateCode} className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-2">{t.enterCode}</h2>
-              <p className="text-gray-500 dark:text-slate-400 text-sm">
+              <h2 className="text-2xl font-black font-display text-slate-900 dark:text-white mb-2 tracking-tight">{t.enterCode}</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
                 {lang === "nl" ? "Typ de 6-cijferige spelcode in om de lobby te betreden." : "Type the 6-digit game code to enter the lobby."}
               </p>
             </div>
 
-            <div>
-                <input
-                  type="text"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000 000"
-                  className="w-full text-center tracking-[0.4em] font-mono text-4xl font-extrabold px-4 py-5 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950/50 dark:focus:bg-slate-900 text-slate-900 dark:text-white shadow-inner"
-                  disabled={isLoading}
-                />
+            <div className="relative py-4">
+              {/* Invisible input overlay that covers the entire visual keyboard target area */}
+              <input
+                type="text"
+                pattern="[0-9]*"
+                inputMode="numeric"
+                maxLength={6}
+                required
+                value={code}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "");
+                  if (val !== code) {
+                    sfx.playSelectAnswer();
+                  }
+                  setCode(val);
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 text-[16px]"
+                disabled={isLoading}
+                autoFocus
+                aria-label={lang === "nl" ? "Voer de 6-cijferige pincode in" : "Enter 6-digit PIN"}
+              />
+
+              {/* Segmented Display Cards */}
+              <div className="flex justify-between items-center gap-2 md:gap-3 relative z-10">
+                {[0, 1, 2, 3, 4, 5].map((index) => {
+                  const digit = code[index];
+                  const isFilled = digit !== undefined;
+                  const isActive = index === code.length && !isLoading;
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`
+                        w-12 h-16 md:w-14 md:h-20 rounded-2xl flex flex-col items-center justify-center border-2 transition-all duration-300 relative overflow-hidden select-none
+                        ${isFilled 
+                          ? "border-purple-500 bg-purple-50/10 dark:bg-purple-950/20 text-purple-600 dark:text-purple-300 shadow-md shadow-purple-500/5 transform scale-100" 
+                          : isActive 
+                            ? "border-fuchsia-500 bg-white dark:bg-slate-900 ring-4 ring-fuchsia-500/10 dark:ring-fuchsia-500/25 scale-105 shadow-lg" 
+                            : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 text-slate-300 dark:text-slate-500"
+                        }
+                      `}
+                    >
+                      {/* Animated Active Blinking Cursor */}
+                      {isActive && (
+                        <div className="absolute w-0.5 h-6 bg-fuchsia-500 animate-[pulse_1s_infinite] rounded-full" />
+                      )}
+
+                      {/* Digit display */}
+                      <span className={`text-2xl md:text-3xl font-black font-display leading-none transition-all duration-200 ${
+                        isFilled ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                      }`}>
+                        {digit}
+                      </span>
+
+                      {/* Dot placeholder for empty slots */}
+                      {!isFilled && !isActive && (
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700 transition-all duration-300" />
+                      )}
+
+                      {/* Subtle elegant glass glare effect inside slots */}
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 pointer-events-none" />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Glowing decorative indicator underneath to guide look */}
+              <div className="flex justify-center mt-3 text-[11px] font-bold text-slate-400 dark:text-slate-500/70 tracking-widest uppercase pointer-events-none">
+                {lang === "nl" ? "Klik hierboven om te typen" : "Tap above to start typing"}
+              </div>
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 border border-red-100 dark:border-red-900 text-red-700 dark:text-red-400 rounded-xl text-center text-sm transition">
-                {error}
+              <div className="p-4 bg-red-50 dark:bg-red-950/20 hover:bg-red-100/70 border border-red-100 dark:border-red-900 text-red-700 dark:text-red-400 rounded-2xl text-center text-sm transition font-semibold">
+                ⚠️ {error}
               </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 onClick={onBack}
-                className="w-1/3 flex items-center justify-center gap-2 border border-gray-200 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-400 py-4 rounded-xl font-semibold transition cursor-pointer"
+                className="w-1/3 flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-400 py-4 rounded-2xl font-bold transition cursor-pointer text-sm"
               >
                 <ArrowLeft className="w-4 h-4" /> {t.back}
               </button>
               <button
                 type="submit"
                 disabled={isLoading || code.length !== 6}
-                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm"
+                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-purple-600/20 dark:shadow-purple-900/40 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none uppercase tracking-widest text-xs"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  lang === "nl" ? "Volgende" : "Next"
+                  lang === "nl" ? "Volgende 🚀" : "Next 🚀"
                 )}
               </button>
             </div>
@@ -436,10 +496,10 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
             </div>
 
             {/* Avatar Builder */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-3xl border border-slate-100 dark:border-slate-850 flex flex-col gap-4 animate-fade-in relative">
+            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col gap-4 animate-fade-in relative">
               
               {/* Immersive Pod Showcase Zone */}
-              <div className="flex flex-col items-center p-5 bg-linear-to-b from-slate-900 via-slate-950 to-slate-900 rounded-2xl border border-slate-850 w-full relative overflow-hidden shadow-inner">
+              <div className="flex flex-col items-center p-5 bg-linear-to-b from-slate-900 via-slate-950 to-slate-900 rounded-2xl border border-slate-800 w-full relative overflow-hidden shadow-inner">
                 {/* Spotlight background radiation */}
                 <div className="absolute inset-0 bg-radial-to-t from-transparent via-transparent to-purple-500/10 opacity-60 pointer-events-none" />
                 <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-45 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
@@ -597,7 +657,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                           baseIdx === idx 
                             ? "bg-purple-50 dark:bg-purple-900/40 border-2 border-purple-600 shadow-xs" 
                             : b.emoji === "" 
-                              ? "bg-slate-100 dark:bg-slate-950 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-850"
+                              ? "bg-slate-100 dark:bg-slate-950 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-800"
                               : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
                         }`}
                         title={b.name}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { Quiz, Question } from "../types";
 import { parseQuizTitle } from "../avatarUtils";
-import { Plus, Trash2, Play, ArrowLeft, HelpCircle, Loader2 } from "lucide-react";
+import { Plus, Trash2, Play, ArrowLeft, HelpCircle, Loader2, Settings, Copy, ChevronUp, ChevronDown, Image, Sliders, Music, Info, Clock, Award, X, Check } from "lucide-react";
 import { translations } from "../translations";
 
 interface QuizManagerProps {
@@ -52,6 +52,22 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       theme: "default",
     },
   ]);
+  const [activeQuestionIdx, setActiveQuestionIdx] = useState<number>(-1);
+
+  const getConfigTypeStyle = (type?: string) => {
+    switch (type) {
+      case "true_false":
+        return { label: "Waar/Niet Waar", bg: "bg-sky-500/10 dark:bg-sky-500/20", text: "text-sky-600 dark:text-sky-400" };
+      case "wheel_spin":
+        return { label: "Geluksrad", bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-500 dark:text-amber-400" };
+      case "puzzle":
+        return { label: "Puzzel", bg: "bg-purple-500/10 dark:bg-purple-500/20", text: "text-purple-500 dark:text-purple-400" };
+      case "slider":
+        return { label: "Schuifbalk", bg: "bg-teal-500/10 dark:bg-teal-500/20", text: "text-teal-500 dark:text-teal-400" };
+      default:
+        return { label: "Meerkeuze", bg: "bg-indigo-500/10 dark:bg-indigo-500/20", text: "text-indigo-500 dark:text-indigo-400" };
+    }
+  };
 
   // Optional Authentication State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -214,8 +230,9 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     }
   };
 
-  // Manual Questions Handlers
+  // Manual Questions Handlers (Slide-Deck presentation actions)
   const handleAddQuestion = () => {
+    const newIdx = questions.length;
     setQuestions([
       ...questions,
       {
@@ -230,11 +247,50 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         theme: "default",
       },
     ]);
+    setActiveQuestionIdx(newIdx);
+  };
+
+  const handleRemoveQuestionAndSelect = (idx: number) => {
+    if (questions.length === 1) return;
+    const nextList = questions.filter((_, i) => i !== idx);
+    setQuestions(nextList);
+    setActiveQuestionIdx((prev) => {
+      if (prev === idx) {
+        return Math.max(0, idx - 1);
+      } else if (prev > idx) {
+        return prev - 1;
+      }
+      return prev;
+    });
+  };
+
+  const handleDuplicateQuestion = (idx: number) => {
+    const updated = [...questions];
+    const original = updated[idx];
+    const duplicated = {
+      ...original,
+      options: [...original.options],
+      correctOptionIndices: original.correctOptionIndices ? [...original.correctOptionIndices] : [original.correctOptionIndex ?? 0],
+    };
+    updated.splice(idx + 1, 0, duplicated);
+    setQuestions(updated);
+    setActiveQuestionIdx(idx + 1);
+  };
+
+  const handleMoveQuestion = (idx: number, direction: "up" | "down") => {
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === questions.length - 1) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    const updated = [...questions];
+    const temp = updated[idx];
+    updated[idx] = updated[targetIdx];
+    updated[targetIdx] = temp;
+    setQuestions(updated);
+    setActiveQuestionIdx(targetIdx);
   };
 
   const handleRemoveQuestion = (idx: number) => {
-    if (questions.length === 1) return;
-    setQuestions(questions.filter((_, i) => i !== idx));
+    handleRemoveQuestionAndSelect(idx);
   };
 
   const handleQuestionChange = (idx: number, field: string, value: any) => {
@@ -340,6 +396,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       theme: quizTheme,
       lobbyMusicUrl: quizLobbyMusicUrl,
     })));
+    setActiveQuestionIdx(-1);
     setActiveTab("create");
   };
 
@@ -486,7 +543,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className={`${activeTab === "create" ? "max-w-[1550px]" : "max-w-4xl"} mx-auto px-4 py-8 transition-all duration-300`}>
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <button
@@ -544,7 +601,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
             </div>
 
             {authError && (
-              <p className="text-xs text-red-500 dark:text-red-400 font-semibold bg-red-50 dark:bg-red-950/30 border border-red-150 dark:border-red-900 p-3 rounded-xl">
+              <p className="text-xs text-red-500 dark:text-red-400 font-semibold bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-3 rounded-xl">
                 {authError}
               </p>
             )}
@@ -615,6 +672,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
             setImageUrl("");
             setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
             setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0, correctOptionIndices: [0], questionType: "multiple_choice" }]);
+            setActiveQuestionIdx(-1);
             setActiveTab("create");
           }}
           className={`flex-1 py-3 text-center font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-2 ${
@@ -713,7 +771,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                     </button>
                     <button
                       onClick={() => handleDeleteQuiz(quiz.id)}
-                      className="text-red-500 hover:text-white hover:bg-red-650 p-2.5 border border-red-100 dark:border-red-900/50 hover:border-red-500 rounded-xl transition cursor-pointer"
+                      className="text-red-500 hover:text-white hover:bg-red-600 p-2.5 border border-red-100 dark:border-red-900/50 hover:border-red-500 rounded-xl transition cursor-pointer"
                       title="Verwijderen"
                     >
                       <Trash2 className="w-5 h-5" />
@@ -728,518 +786,770 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
 
       {/* Tab Contents: Manual creation form */}
       {activeTab === "create" && (
-        <form onSubmit={handleSaveManualQuiz} className="space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
-            <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white">Quiz Gegevens</h2>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Titel *</label>              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Bijv. De Grote Vakantie Quiz of Geschiedenis Quiz"
-                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Omschrijving</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Geef een korte omschrijving van je quiz"
-                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition h-20 resize-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Afbeelding URL (Optioneel)</label>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://voorbeeld.nl/plaatje.jpg"
-                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🛸 Achtergrond Thema Vragen</label>
-                <select
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value as any)}
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
-                >
-                  <option value="default">🌌 Standaard (Donker)</option>
-                  <option value="summer">🌞 Zomer (Strand vibes)</option>
-                  <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
-                  <option value="halloween">🎃 Halloween (Spooky)</option>
-                  <option value="space">🪐 Kosmisch (Sterren)</option>
-                  <option value="neon">⚡ Neon Retro (Synthwave)</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎈 Achtergrond Thema Lobby</label>
-                <select
-                  value={lobbyTheme}
-                  onChange={(e) => setLobbyTheme(e.target.value as any)}
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
-                >
-                  <option value="default">🌌 Standaard (Donker)</option>
-                  <option value="summer">🌞 Zomer (Strand vibes)</option>
-                  <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
-                  <option value="halloween">🎃 Halloween (Spooky)</option>
-                  <option value="space">🪐 Kosmisch (Sterren)</option>
-                  <option value="neon">⚡ Neon Retro (Synthwave)</option>
-                </select>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT COLUMN: Slide / Question Deck Sidebar */}
+          <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-8 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 bg-slate-50/50 dark:bg-slate-950/20 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/40">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
+              <span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider font-display">🎞️ Dia Overzicht</span>
+              <span className="text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full">
+                {questions.length + 1} Dias
+              </span>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-              <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎵 Lobby Achtergrondmuziek</label>
-              <select
-                value={lobbyMusicUrl}
-                onChange={(e) => setLobbyMusicUrl(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
+            <div className="space-y-3 pt-2">
+              {/* Slide -1: Quiz Details */}
+              <button
+                type="button"
+                onClick={() => setActiveQuestionIdx(-1)}
+                className={`w-full text-left p-4 rounded-[1.25rem] border transition-all duration-300 flex flex-col gap-1.5 cursor-pointer group relative overflow-hidden ${
+                  activeQuestionIdx === -1
+                    ? "bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-700 text-white shadow-xl shadow-indigo-600/15 scale-[1.02] -translate-y-0.5"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-800 dark:text-slate-200 hover:-translate-y-0.5"
+                }`}
               >
-                <option value="https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3">🎵 Soundtrack 1 (Mellow - Standaard)</option>
-                <option value="https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3">🕹️ Soundtrack 2 (Retro / Arcade)</option>
-                <option value="https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3">⚡ Soundtrack 3 (Upbeat / Energiek)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white">Vragen ({questions.length})</h2>
-            {questions.map((q, qIdx) => (
-              <div key={qIdx} className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-gray-100 dark:border-slate-805 shadow-sm space-y-4 relative">
-                <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-slate-800">
-                  <span className="font-bold text-slate-700 dark:text-slate-200">Vraag {qIdx + 1}</span>
-                  {questions.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveQuestion(qIdx)}
-                      className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 p-2 rounded-lg transition cursor-pointer font-semibold"
-                    >
-                      <Trash2 className="w-4 h-4 inline mr-1" /> Vraag Verwijderen
-                    </button>
-                  )}
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${
+                    activeQuestionIdx === -1 ? "text-indigo-200" : "text-indigo-600 dark:text-indigo-400"
+                  }`}>
+                    ⚙️ Instellingen
+                  </span>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                    activeQuestionIdx === -1 ? "bg-indigo-700 text-indigo-100" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                  }`}>
+                    THEMA
+                  </span>
                 </div>
+                <span className="font-extrabold text-sm truncate">
+                  {title.trim() || "Mijn Grote Quiz"}
+                </span>
+                <span className={`text-[11px] truncate ${
+                  activeQuestionIdx === -1 ? "text-indigo-100" : "text-slate-400 dark:text-slate-500"
+                }`}>
+                  {description.trim() || "Algemene details & thema..."}
+                </span>
+                {activeQuestionIdx === -1 && (
+                  <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white" />
+                )}
+              </button>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300 mb-1">Vraagstelling *</label>
-                  <input
-                    type="text"
-                    required
-                    value={q.questionText}
-                    onChange={(e) => handleQuestionChange(qIdx, "questionText", e.target.value)}
-                    placeholder="Type hier je vraag..."
-                    className="w-full px-4 py-2 border border-gray-250 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition"
-                  />
-                </div>
+              {/* Loop over questions as slides */}
+              {questions.map((q, qIdx) => {
+                const isActive = activeQuestionIdx === qIdx;
+                const typeStyle = getConfigTypeStyle(q.questionType);
+                
+                return (
+                  <div
+                    key={qIdx}
+                    onClick={() => setActiveQuestionIdx(qIdx)}
+                    className={`w-full text-left p-4 rounded-[1.25rem] border transition-all duration-300 flex flex-col gap-1.5 cursor-pointer group relative overflow-hidden ${
+                      isActive
+                        ? "bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-700 text-white shadow-xl shadow-indigo-600/15 scale-[1.02] -translate-y-0.5"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-800 dark:text-slate-200 hover:-translate-y-0.5"
+                    }`}
+                  >
+                    {/* Top slide indicator & type badge */}
+                    <div className="flex items-center justify-between gap-1.5 mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`text-xs font-black shrink-0 ${
+                          isActive ? "text-indigo-100" : "text-slate-400 dark:text-slate-500"
+                        }`}>
+                          #{qIdx + 1}
+                        </span>
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full truncate shrink-0 ${
+                          isActive 
+                            ? "bg-indigo-700 text-indigo-100 border border-white/10"
+                            : `${typeStyle.bg} ${typeStyle.text}`
+                        }`}>
+                          {typeStyle.label}
+                        </span>
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-655 dark:text-slate-300 mb-1">Vraag Afbeelding URL (Optioneel)</label>
-                  <input
-                    type="url"
-                    value={q.imageUrl || ""}
-                    onChange={(e) => handleQuestionChange(qIdx, "imageUrl", e.target.value)}
-                    placeholder="https://voorbeeld.nl/plaatje.jpg"
-                    className="w-full px-4 py-2 border border-gray-255 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition"
-                  />
-                </div>
-
-                {/* Sub configuration line */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300 mb-1">Tijdslimiet (seconde)</label>
-                    <select
-                      value={q.timeLimit}
-                      onChange={(e) => handleQuestionChange(qIdx, "timeLimit", e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
-                    >
-                      <option value={10}>10 seconden</option>
-                      <option value={20}>20 seconden</option>
-                      <option value={30}>30 seconden</option>
-                      <option value={60}>60 seconden</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300 mb-1">Puntenwaarde</label>
-                    <select
-                      value={q.points}
-                      onChange={(e) => handleQuestionChange(qIdx, "points", e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
-                    >
-                      <option value={500}>500 punten (Makkelijk)</option>
-                      <option value={1000}>1000 punten (Standaard)</option>
-                      <option value={2000}>2000 punten (Dubbele Punten!)</option>
-                    </select>
-                  </div>
-                </div>
-                  {/* Question Type and Status Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300 mb-1">Vraagtype</label>
-                    <select
-                      value={q.questionType || "multiple_choice"}
-                      onChange={(e) => handleQuestionChange(qIdx, "questionType", e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer"
-                    >
-                      <option value="multiple_choice">Meerkeuze (2-6 opties)</option>
-                      <option value="true_false">Waar of Niet Waar</option>
-                      <option value="wheel_spin">🎡 Waag een gokje (Sectorenrad)</option>
-                      <option value="puzzle">🧩 Puzzel (Kleuren/Opties op volgorde slepen)</option>
-                      <option value="slider">🎚️ Schuifbalk / Schaal (1 - 5)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300 mb-1">Status</label>
-                    <div className="px-3 py-2 border border-gray-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 rounded-lg text-xs flex items-center justify-between text-slate-600 dark:text-slate-400 h-[42px]">
-                      {q.questionType === "wheel_spin" ? (
-                        <>
-                          <span>Kans-gokronde 🎰</span>
-                          <span className="font-bold text-amber-500 px-1.5 py-0.5 rounded-md bg-amber-50/40 dark:bg-amber-950/20 uppercase tracking-widest text-[9px]">
-                            GELUKSRAD
-                          </span>
-                        </>
-                      ) : q.questionType === "puzzle" ? (
-                        <>
-                          <span>Sorteeroefening 🧩</span>
-                          <span className="font-bold text-purple-500 px-1.5 py-0.5 rounded-md bg-purple-50/40 dark:bg-purple-950/20 uppercase tracking-widest text-[9px]">
-                            PUZZEL
-                          </span>
-                        </>
-                      ) : q.questionType === "slider" ? (
-                        <>
-                          <span>Schaal kiezer 🎚️</span>
-                          <span className="font-bold text-teal-500 px-1.5 py-0.5 rounded-md bg-teal-50/40 dark:bg-teal-950/20 uppercase tracking-widest text-[9px]">
-                            SLIDER
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span>{((q.correctOptionIndices || [q.correctOptionIndex ?? 0]).length > 1) ? "Multi-select" : "Single-select"}</span>
-                          <span className="font-bold text-indigo-500 px-1.5 py-0.5 rounded-md bg-indigo-50/40 dark:bg-indigo-950/20 uppercase tracking-widest text-[9px]">
-                            {((q.correctOptionIndices || [q.correctOptionIndex ?? 0]).length > 1) ? "MULTI" : "SINGLE"}
-                          </span>
-                        </>
-                      )}
+                      {/* Hover action bar */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveQuestion(qIdx, "up");
+                          }}
+                          disabled={qIdx === 0}
+                          className={`p-1 rounded-md transition disabled:opacity-20 cursor-pointer ${
+                            isActive 
+                              ? "hover:bg-indigo-700 text-indigo-200" 
+                              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                          }`}
+                          title="Omhoog"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveQuestion(qIdx, "down");
+                          }}
+                          disabled={qIdx === questions.length - 1}
+                          className={`p-1 rounded-md transition disabled:opacity-20 cursor-pointer ${
+                            isActive 
+                              ? "hover:bg-indigo-700 text-indigo-200" 
+                              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                          }`}
+                          title="Omlaag"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicateQuestion(qIdx);
+                          }}
+                          className={`p-1 rounded-md transition cursor-pointer ${
+                            isActive ? "hover:bg-indigo-700 text-indigo-200" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                          }`}
+                          title="Dupliceer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        {questions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveQuestion(qIdx);
+                            }}
+                            className={`p-1 rounded-md transition cursor-pointer ${
+                              isActive ? "hover:bg-indigo-700 text-red-200" : "hover:bg-red-50 dark:hover:bg-red-950/40 text-red-500"
+                            }`}
+                            title="Verwijder"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                 {/* Options inputs */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-sm font-semibold text-gray-650 dark:text-slate-300">
-                      {q.questionType === "wheel_spin" ? (
-                        <span>Wielen op het gokrad * <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Geef hier de mogelijke uitkomsten van het rad op)</span></span>
-                      ) : q.questionType === "puzzle" ? (
-                        <span>Puzzel Sorteerkaarten * <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Zorg dat ze in de CORRECTE volgorde staan)</span></span>
-                      ) : q.questionType === "slider" ? (
-                        <span>Correct getal op schaal * <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Bepaal de juiste waarde van 1 t/m 5)</span></span>
-                      ) : (
-                        <span>Antwoordopties * <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Vink de correcte antwoorden aan)</span></span>
-                      )}
-                    </label>
-                    {q.questionType !== "true_false" && q.questionType !== "slider" && q.options.length < 6 && (
-                      <button
-                        type="button"
-                        onClick={() => handleAddOptionToQuestion(qIdx)}
-                        className="text-xs text-indigo-500 hover:text-indigo-650 font-black flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" /> Optie Toevoegen ({q.options.length}/6)
-                      </button>
+                    {/* Question text truncated */}
+                    <span className="font-extrabold text-xs truncate">
+                      {q.questionText.trim() || "Lege vraagstelling..."}
+                    </span>
+
+                    {/* Stats indicators */}
+                    <div className={`flex items-center gap-2.5 text-[10px] font-bold pt-1 ${
+                      isActive ? "text-indigo-200" : "text-slate-400 dark:text-slate-500"
+                    }`}>
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="w-2.5 h-2.5 shrink-0" />
+                        {q.timeLimit}s
+                      </span>
+                      <span className="flex items-center gap-0.5">
+                        <Award className="w-2.5 h-2.5 shrink-0" />
+                        {q.points}pt
+                      </span>
+                    </div>
+                    {isActive && (
+                      <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white" />
                     )}
                   </div>
+                );
+              })}
+            </div>
 
-                  {q.questionType === "slider" ? (
-                    <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-5">
-                      <span className="block text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest text-center border-b border-indigo-100 dark:border-indigo-950/40 pb-2">
-                        ⚙️ Pas Schaalbereik & Correct Getal Aan
-                      </span>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Startwaarde (Min)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={q.sliderMin ?? 1}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              const updated = [...questions];
-                              updated[qIdx].sliderMin = val;
-                              // Clamp correct value
-                              if ((updated[qIdx].correctOptionIndex ?? 2) < val) {
-                                updated[qIdx].correctOptionIndex = val;
-                              }
-                              setQuestions(updated);
-                            }}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Eindwaarde (Max)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            value={q.sliderMax ?? (q.options?.length || 5)}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              const updated = [...questions];
-                              updated[qIdx].sliderMax = val;
-                              // Clamp correct value
-                              if ((updated[qIdx].correctOptionIndex ?? 2) > val) {
-                                updated[qIdx].correctOptionIndex = val;
-                              }
-                              setQuestions(updated);
-                            }}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stapgrootte (Step)</label>
-                          <input
-                            type="number"
-                            min="0.001"
-                            step="any"
-                            value={q.sliderStep ?? 1}
-                            placeholder="bijv. 300005"
-                            onChange={(e) => {
-                              const val = Math.max(0.001, Number(e.target.value));
-                              const updated = [...questions];
-                              updated[qIdx].sliderStep = val;
-                              setQuestions(updated);
-                            }}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="bg-white dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center">
-                          Selecteer de juiste waarde op deze schaal door de balk te schuiven of de waarde direct te typen:
-                        </p>
-
-                        <div className="space-y-2 py-1">
-                          <input
-                            type="range"
-                            min={q.sliderMin ?? 1}
-                            max={q.sliderMax ?? (q.options?.length || 5)}
-                            step={q.sliderStep ?? 1}
-                            value={q.correctOptionIndex ?? 3}
-                            onChange={(e) => {
-                              handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
-                            }}
-                            className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                          />
-                          <div className="flex justify-between text-[10px] font-mono text-slate-400 font-black px-1">
-                            <span>Min: {(q.sliderMin ?? 1).toLocaleString("nl-NL")}</span>
-                            <span>Max: {(q.sliderMax ?? (q.options?.length || 5)).toLocaleString("nl-NL")}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Correct Getal:</span>
-                            <input
-                              type="number"
-                              min={q.sliderMin ?? 1}
-                              max={q.sliderMax ?? (q.options?.length || 5)}
-                              step="any"
-                              value={q.correctOptionIndex ?? 3}
-                              onChange={(e) => {
-                                handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
-                              }}
-                              className="w-36 px-3 py-1.5 border border-indigo-200 dark:border-indigo-900 text-center font-extrabold text-sm bg-indigo-50/20 text-indigo-750 dark:text-indigo-400 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs"
-                            />
-                          </div>
-                          
-                          {/* Render visual dot helpers only if the scale range has <= 15 values */}
-                          {(() => {
-                            const minVal = q.sliderMin ?? 1;
-                            const maxVal = q.sliderMax ?? (q.options?.length || 5);
-                            const stepVal = q.sliderStep ?? 1;
-                            const rangeCount = Math.floor((maxVal - minVal) / stepVal) + 1;
-                            
-                            if (rangeCount > 0 && rangeCount <= 15) {
-                              const dots = [];
-                              for (let v = minVal; v <= maxVal; v += stepVal) {
-                                dots.push(parseFloat(v.toFixed(4)));
-                              }
-                              return (
-                                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-sm">
-                                  {dots.map((val) => {
-                                    const isSelected = q.correctOptionIndex === val;
-                                    return (
-                                      <button
-                                        type="button"
-                                        key={val}
-                                        onClick={() => {
-                                          handleQuestionChange(qIdx, "correctOptionIndex", val);
-                                        }}
-                                        className={`px-2 py-1 rounded-lg font-bold text-[10px] border transition-all cursor-pointer ${
-                                          isSelected
-                                            ? "bg-indigo-650 border-indigo-700 text-white shadow-xs scale-105"
-                                            : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-305 hover:bg-slate-100"
-                                        }`}
-                                      >
-                                        {val}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  ) : q.questionType === "puzzle" ? (
-                    <div className="space-y-3">
-                      <p className="text-xs text-indigo-500 font-bold mb-2 p-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30">
-                        ⚡ Schrijf de antwoorden in de CORRECTE volgorde van boven naar beneden. Tijdens de quiz worden deze kaarten voor spelers door elkaar geschud. Zij moeten ze vervolgens op de juiste volgorde slepen.
-                      </p>
-                      <div className="grid md:grid-cols-2 gap-3">
-                        {q.options.map((opt, oIdx) => {
-                          const optStyles = [
-                            { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "Rood" },
-                            { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "Blauw" },
-                            { border: "border-yellow-200 dark:border-yellow-905/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "Geel" },
-                            { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "Groen" },
-                            { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "Paars" },
-                            { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "Oranje" },
-                          ];
-                          const styleInfo = optStyles[oIdx % optStyles.length];
-                          
-                          return (
-                            <div key={oIdx} className="flex items-center gap-2.5 bg-slate-50/55 dark:bg-slate-900/30 p-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 relative group">
-                              <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold font-mono text-xs flex items-center justify-center border border-indigo-100 dark:border-indigo-900/40 shrink-0 select-none">
-                                #{oIdx + 1}
-                              </span>
-                              <input
-                                type="text"
-                                required
-                                value={opt}
-                                onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
-                                placeholder={`Element of kleur ${oIdx + 1}`}
-                                className={`flex-1 px-3 py-2 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm`}
-                              />
-                              {q.options.length > 2 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
-                                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
-                                  title="Item verwijderen"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-3">
-                      {q.options.map((opt, oIdx) => {
-                        const optStyles = [
-                          { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "A (Rood)" },
-                          { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "B (Blauw)" },
-                          { border: "border-yellow-200 dark:border-yellow-905/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "C (Geel)" },
-                          { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "D (Groen)" },
-                          { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "E (Paars)" },
-                          { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "F (Oranje)" },
-                        ];
-                        const styleInfo = optStyles[oIdx % optStyles.length];
-                        const currentCorrects = q.correctOptionIndices || [q.correctOptionIndex ?? 0];
-                        const isCorrect = currentCorrects.includes(oIdx);
-
-                        const handleCheckboxToggle = () => {
-                          let newCorrects = [...currentCorrects];
-                          if (isCorrect) {
-                            newCorrects = newCorrects.filter((val) => val !== oIdx);
-                          } else {
-                            newCorrects.push(oIdx);
-                          }
-                          handleQuestionChange(qIdx, "correctOptionIndices", newCorrects);
-                        };
-
-                        return (
-                          <div key={oIdx} className="flex items-center gap-2 group">
-                            {q.questionType !== "wheel_spin" && (
-                              <input
-                                type="checkbox"
-                                checked={isCorrect}
-                                onChange={handleCheckboxToggle}
-                                className="w-5 h-5 rounded border-gray-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0 accent-indigo-500"
-                              />
-                            )}
-                            <div className="flex-1 flex gap-2 relative items-center">
-                              <input
-                                type="text"
-                                required
-                                disabled={q.questionType === "true_false"}
-                                value={opt}
-                                onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
-                                placeholder={q.questionType === "wheel_spin" ? `Sector ${oIdx + 1} tekst of punten` : `Antwoordoptie ${styleInfo.label}`}
-                                className={`flex-1 px-3 py-2.5 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition disabled:opacity-85 disabled:cursor-not-allowed`}
-                              />
-                              {q.questionType !== "true_false" && q.options.length > 2 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
-                                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
-                                  title="Optie verwijderen"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {q.questionType === "wheel_spin" ? (
-                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 font-medium bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200/40">
-                      🎰 Spelers draaien aan dit rad voor punten tijdens deze ronde! Tip: Gebruik getallen (bijv. "+500", "-100", "0") of tekst (bijv. "Bankroet", "Verdubbelen"). De logica herkent automatisch getallen of geeft vaste bonuspunten!
-                    </p>
-                  ) : q.questionType === "puzzle" ? (
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 font-medium bg-purple-50/50 dark:bg-purple-950/20 p-2.5 rounded-lg border border-purple-200/40">
-                      🧩 Sorteervragen (puzzels) zijn ontzettend dynamisch en leuk! De gekleurde kaarten worden door spelers gesleept en de score hangt af van de exacte juiste volgorde!
-                    </p>
-                  ) : q.questionType === "slider" ? (
-                    <p className="text-xs text-teal-600 dark:text-teal-400 mt-1 font-medium bg-teal-50/50 dark:bg-teal-950/20 p-2.5 rounded-lg border border-teal-200/40">
-                      🎚️ Schuifbalkvragen dagen spelers uit om een getal op een schaal te schuiven. De dichtstbijzijnde of exacte waarde levert de score op!
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                      Vink de correcte antwoorden hierboven aan. Selecteer meerdere juiste opties om deze vraag automatisch te veranderen in een MULTI-keuze vraag!
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <button
-              type="button"
-              onClick={handleAddQuestion}
-              className="w-full flex items-center justify-center gap-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold transition cursor-pointer border border-slate-200 dark:border-slate-700"
-            >
-              <Plus className="w-5 h-5" /> Extra Vraag Toevoegen
-            </button>
+            {/* Slide Action Row Buttons */}
+            <div className="pt-4 border-t border-gray-200 dark:border-slate-800 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleAddQuestion}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-black transition cursor-pointer text-xs uppercase tracking-widest hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-indigo-500/10 duration-200"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nieuwe Dia 🚀
+              </button>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md transition cursor-pointer"
-          >
-            {editingQuizId ? "Wijzigingen Opslaan" : "Sla Quiz Op"}
-          </button>
-        </form>
+          {/* RIGHT COLUMN: Active Viewport Panel */}
+          <div className="lg:col-span-9">
+            <form onSubmit={handleSaveManualQuiz} className="space-y-6">
+              
+              {/* Form Content depending on activeQuestionIdx */}
+              {activeQuestionIdx === -1 ? (
+                /* QUIZ GENERAL DETAILS (⚙️ SETTINGS SLIDE) */
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4">
+                    <div>
+                      <span className="text-xs font-black text-indigo-500 uppercase tracking-widest block mb-1">ALGEMEEN ONTWERP</span>
+                      <h2 className="text-2xl font-black font-display text-slate-800 dark:text-white flex items-center gap-2">
+                        <span>⚙️ Quiz Instellingen & Thema</span>
+                      </h2>
+                    </div>
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500">
+                      Settings Slide
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Titel *</label>
+                      <input
+                        type="text"
+                        required
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Bijv. De Grote Vakantie Quiz of Geschiedenis Quiz"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Omschrijving</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Geef een korte omschrijving van je quiz"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition h-20 resize-none font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Afbeelding URL (Optioneel)</label>
+                      <input
+                        type="url"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://voorbeeld.nl/plaatje.jpg"
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🛸 Achtergrond Thema Vragen</label>
+                        <select
+                          value={theme}
+                          onChange={(e) => setTheme(e.target.value as any)}
+                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
+                        >
+                          <option value="default">🌌 Standaard (Donker)</option>
+                          <option value="summer">🌞 Zomer (Strand vibes)</option>
+                          <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
+                          <option value="halloween">🎃 Halloween (Spooky)</option>
+                          <option value="space">🪐 Kosmisch (Sterren)</option>
+                          <option value="neon">⚡ Neon Retro (Synthwave)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎈 Achtergrond Thema Lobby</label>
+                        <select
+                          value={lobbyTheme}
+                          onChange={(e) => setLobbyTheme(e.target.value as any)}
+                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
+                        >
+                          <option value="default">🌌 Standaard (Donker)</option>
+                          <option value="summer">🌞 Zomer (Strand vibes)</option>
+                          <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
+                          <option value="halloween">🎃 Halloween (Spooky)</option>
+                          <option value="space">🪐 Kosmisch (Sterren)</option>
+                          <option value="neon">⚡ Neon Retro (Synthwave)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎵 Lobby Achtergrondmuziek</label>
+                      <select
+                        value={lobbyMusicUrl}
+                        onChange={(e) => setLobbyMusicUrl(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
+                      >
+                        <option value="https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3">🎵 Soundtrack 1 (Mellow - Standaard)</option>
+                        <option value="https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3">🕹️ Soundtrack 2 (Retro / Arcade)</option>
+                        <option value="https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3">⚡ Soundtrack 3 (Upbeat / Energiek)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">Sla de quiz op nadat je alle vragen hebt ingevuld.</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveQuestionIdx(0)}
+                      className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-120 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer"
+                    >
+                      Begin met Vragen <Play className="w-3 h-3 justify-center text-current inline fill-current" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* QUESTION CARD COMPONENT SLIDE EDIT VIEW */
+                (() => {
+                  const qIdx = activeQuestionIdx;
+                  const q = questions[qIdx];
+                  if (!q) return null;
+
+                  return (
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6 relative">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800">
+                        <div>
+                          <span className="text-xs font-black text-indigo-500 uppercase tracking-widest block mb-1">
+                            Dia-Editor & Antwoorden
+                          </span>
+                          <h2 className="text-2xl font-black font-display text-slate-800 dark:text-white flex items-center gap-2">
+                            <span>🎭 Dia {qIdx + 1} Bewerken</span>
+                          </h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicateQuestion(qIdx)}
+                            className="text-xs bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center gap-1 cursor-pointer font-bold"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Dupliceren
+                          </button>
+                          {questions.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveQuestion(qIdx)}
+                              className="text-xs bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 text-red-500 px-3 py-2 rounded-lg border border-red-200 dark:border-red-900/40 transition flex items-center gap-1 cursor-pointer font-bold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Verwijderen
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Question Text */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Vraagstelling *</label>
+                        <input
+                          type="text"
+                          required
+                          value={q.questionText}
+                          onChange={(e) => handleQuestionChange(qIdx, "questionText", e.target.value)}
+                          placeholder="Type hier je vraag..."
+                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition font-extrabold text-base focus:border-transparent placeholder-slate-300 dark:placeholder-slate-700"
+                        />
+                      </div>
+
+                      {/* Question Image URL & Interactive Thumbnail Preview */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Vraag Afbeelding URL (Optioneel)</label>
+                          <input
+                            type="url"
+                            value={q.imageUrl || ""}
+                            onChange={(e) => handleQuestionChange(qIdx, "imageUrl", e.target.value)}
+                            placeholder="https://voorbeeld.nl/plaatje.jpg"
+                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition text-sm font-medium"
+                          />
+                        </div>
+                        <div className="md:col-span-1 flex flex-col justify-end">
+                          {q.imageUrl ? (
+                            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 h-[48px] flex items-center px-3 gap-2">
+                              <img 
+                                src={q.imageUrl} 
+                                alt="Slide preview" 
+                                referrerPolicy="no-referrer"
+                                className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-slate-800 shrink-0" 
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <span className="text-[10px] text-emerald-500 font-extrabold block">Geladen ✓</span>
+                                <span className="text-[8px] text-slate-400 dark:text-slate-500 truncate block">Mediakaart</span>
+                              </div>
+                              <button 
+                                type="button" 
+                                onClick={() => handleQuestionChange(qIdx, "imageUrl", "")} 
+                                className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer"
+                              >
+                                Wis
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800/80 h-[48px] flex items-center justify-center text-xs text-slate-400">
+                              Geen media geüpload
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Question Configuration Settings Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">⏱️ Antwoordtijd (Sec)</label>
+                          <select
+                            value={q.timeLimit}
+                            onChange={(e) => handleQuestionChange(qIdx, "timeLimit", e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                          >
+                            <option value={10}>10 seconden</option>
+                            <option value={20}>20 seconden</option>
+                            <option value={30}>30 seconden</option>
+                            <option value={60}>60 seconden</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🏆 Punten Waarde</label>
+                          <select
+                            value={q.points}
+                            onChange={(e) => handleQuestionChange(qIdx, "points", e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                          >
+                            <option value={500}>500 (Makkelijk)</option>
+                            <option value={1000}>1000 (Standaard)</option>
+                            <option value={2000}>2000 (VIP / Bonus!)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🚀 Vraag Speltype</label>
+                          <select
+                            value={q.questionType || "multiple_choice"}
+                            onChange={(e) => handleQuestionChange(qIdx, "questionType", e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                          >
+                            <option value="multiple_choice">Meerkeuze (2-6 opties)</option>
+                            <option value="true_false">Waar of Niet Waar</option>
+                            <option value="wheel_spin">🎡 Geluksrad gokronde</option>
+                            <option value="puzzle">🧩 Sorteer puzzle volgorde</option>
+                            <option value="slider">🎚️ Schuifbalk getallenschaal</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Question Options/Answers Block */}
+                      <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex justify-between items-center">
+                          <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 font-display">
+                            {q.questionType === "wheel_spin" ? (
+                              <span>🎡 Rad-sectoren uitkomsten <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Zelf in te vullen)</span></span>
+                            ) : q.questionType === "puzzle" ? (
+                              <span>🧩 Sorteer Elementen in de CORREKTE volgorde <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Onder elkaar invoeren)</span></span>
+                            ) : q.questionType === "slider" ? (
+                              <span>🎚️ Bepaal het antwoord & schaalbereik</span>
+                            ) : (
+                              <span>📝 Antwoordopties <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Vink de juiste antwoorden aan)</span></span>
+                            )}
+                          </label>
+                          
+                          {q.questionType !== "true_false" && q.questionType !== "slider" && q.options.length < 6 && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddOptionToQuestion(qIdx)}
+                              className="text-xs text-indigo-500 hover:text-indigo-650 font-black flex items-center gap-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/20 px-2.5 py-1.5 rounded-lg transition"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Antwoord Toevoegen ({q.options.length}/6)
+                            </button>
+                          )}
+                        </div>
+
+                        {/* RENDER SPECIFIC OPTION EDITOR MODULES */}
+                        {q.questionType === "slider" ? (
+                          <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 space-y-5">
+                            <span className="block text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest text-center border-b border-indigo-100 dark:border-indigo-950/40 pb-2">
+                              ⚙️ Pas Schaalbereik & Correct Getal Aan
+                            </span>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="space-y-1">
+                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Startwaarde (Min)</label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={q.sliderMin ?? 1}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    const updated = [...questions];
+                                    updated[qIdx].sliderMin = val;
+                                    if ((updated[qIdx].correctOptionIndex ?? 2) < val) {
+                                      updated[qIdx].correctOptionIndex = val;
+                                    }
+                                    setQuestions(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Eindwaarde (Max)</label>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={q.sliderMax ?? (q.options?.length || 5)}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    const updated = [...questions];
+                                    updated[qIdx].sliderMax = val;
+                                    if ((updated[qIdx].correctOptionIndex ?? 2) > val) {
+                                      updated[qIdx].correctOptionIndex = val;
+                                    }
+                                    setQuestions(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stapgrootte (Step)</label>
+                                <input
+                                  type="number"
+                                  min="0.001"
+                                  step="any"
+                                  value={q.sliderStep ?? 1}
+                                  onChange={(e) => {
+                                    const val = Math.max(0.001, Number(e.target.value));
+                                    const updated = [...questions];
+                                    updated[qIdx].sliderStep = val;
+                                    setQuestions(updated);
+                                  }}
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center">
+                                Selecteer de juiste waarde op deze schaal door de balk te schuiven of de waarde direct te typen:
+                              </p>
+
+                              <div className="space-y-2 py-1">
+                                <input
+                                  type="range"
+                                  min={q.sliderMin ?? 1}
+                                  max={q.sliderMax ?? (q.options?.length || 5)}
+                                  step={q.sliderStep ?? 1}
+                                  value={q.correctOptionIndex ?? 3}
+                                  onChange={(e) => {
+                                    handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
+                                  }}
+                                  className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                />
+                                <div className="flex justify-between text-[10px] font-mono text-slate-400 font-black px-1">
+                                  <span>Min: {(q.sliderMin ?? 1).toLocaleString("nl-NL")}</span>
+                                  <span>Max: {(q.sliderMax ?? (q.options?.length || 5)).toLocaleString("nl-NL")}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-center justify-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Correct Getal:</span>
+                                  <input
+                                    type="number"
+                                    min={q.sliderMin ?? 1}
+                                    max={q.sliderMax ?? (q.options?.length || 5)}
+                                    step="any"
+                                    value={q.correctOptionIndex ?? 3}
+                                    onChange={(e) => {
+                                      handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
+                                    }}
+                                    className="w-36 px-3 py-1.5 border border-indigo-200 dark:border-indigo-900 text-center font-extrabold text-sm bg-indigo-50/20 text-indigo-600 dark:text-indigo-400 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs"
+                                  />
+                                </div>
+                                
+                                {(() => {
+                                  const minVal = q.sliderMin ?? 1;
+                                  const maxVal = q.sliderMax ?? (q.options?.length || 5);
+                                  const stepVal = q.sliderStep ?? 1;
+                                  const rangeCount = Math.floor((maxVal - minVal) / stepVal) + 1;
+                                  
+                                  if (rangeCount > 0 && rangeCount <= 12) {
+                                    const dots = [];
+                                    for (let v = minVal; v <= maxVal; v += stepVal) {
+                                      dots.push(parseFloat(v.toFixed(4)));
+                                    }
+                                    return (
+                                      <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-sm">
+                                        {dots.map((val) => {
+                                          const isSelected = q.correctOptionIndex === val;
+                                          return (
+                                            <button
+                                              type="button"
+                                              key={val}
+                                              onClick={() => {
+                                                handleQuestionChange(qIdx, "correctOptionIndex", val);
+                                              }}
+                                              className={`px-2.5 py-1 rounded-lg font-bold text-[10px] border transition-all cursor-pointer ${
+                                                isSelected
+                                                  ? "bg-indigo-600 border-indigo-700 text-white shadow-xs scale-105"
+                                                  : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
+                                              }`}
+                                            >
+                                              {val}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        ) : q.questionType === "puzzle" ? (
+                          <div className="space-y-3">
+                            <p className="text-xs text-indigo-500 font-bold mb-2 p-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30">
+                              ⚡ Schrijf de antwoorden in de CORRECTE volgorde van boven naar beneden. Spelers moeten ze op hun schermen op de juiste volgorde slepen.
+                            </p>
+                            <div className="grid md:grid-cols-2 gap-3">
+                              {q.options.map((opt, oIdx) => {
+                                const optStyles = [
+                                  { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "Rood" },
+                                  { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "Blauw" },
+                                  { border: "border-yellow-200 dark:border-yellow-900/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "Geel" },
+                                  { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "Groen" },
+                                  { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "Paars" },
+                                  { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "Oranje" },
+                                ];
+                                const styleInfo = optStyles[oIdx % optStyles.length];
+                                
+                                return (
+                                  <div key={oIdx} className="flex items-center gap-2.5 bg-slate-50/55 dark:bg-slate-900/30 p-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 relative group">
+                                    <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold font-mono text-xs flex items-center justify-center border border-indigo-100 dark:border-indigo-900/40 shrink-0 select-none">
+                                      #{oIdx + 1}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      required
+                                      value={opt}
+                                      onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
+                                      placeholder={`Element of kleur ${oIdx + 1}`}
+                                      className={`flex-1 px-3 py-2 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm font-medium`}
+                                    />
+                                    {q.options.length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
+                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-55 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
+                                        title="Item verwijderen"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid md:grid-cols-2 gap-3 grid-cols-1">
+                            {q.options.map((opt, oIdx) => {
+                              const optStyles = [
+                                { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "A (Rood)" },
+                                { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "B (Blauw)" },
+                                { border: "border-yellow-200 dark:border-yellow-900/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "C (Geel)" },
+                                { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "D (Groen)" },
+                                { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "E (Paars)" },
+                                { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "F (Oranje)" },
+                              ];
+                              const styleInfo = optStyles[oIdx % optStyles.length];
+                              const currentCorrects = q.correctOptionIndices || [q.correctOptionIndex ?? 0];
+                              const isCorrect = currentCorrects.includes(oIdx);
+
+                              const handleCheckboxToggle = () => {
+                                let newCorrects = [...currentCorrects];
+                                if (isCorrect) {
+                                  newCorrects = newCorrects.filter((val) => val !== oIdx);
+                                } else {
+                                  newCorrects.push(oIdx);
+                                }
+                                handleQuestionChange(qIdx, "correctOptionIndices", newCorrects);
+                              };
+
+                              return (
+                                <div key={oIdx} className="flex items-center gap-2 group">
+                                  {q.questionType !== "wheel_spin" && (
+                                    <input
+                                      type="checkbox"
+                                      checked={isCorrect}
+                                      onChange={handleCheckboxToggle}
+                                      className="w-5 h-5 rounded border-gray-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0 accent-indigo-500"
+                                    />
+                                  )}
+                                  <div className="flex-1 flex gap-2 relative items-center">
+                                    <input
+                                      type="text"
+                                      required
+                                      disabled={q.questionType === "true_false"}
+                                      value={opt}
+                                      onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
+                                      placeholder={q.questionType === "wheel_spin" ? `Sector ${oIdx + 1} tekst` : `Antwoordoptie ${styleInfo.label}`}
+                                      className={`flex-1 px-3 py-2.5 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition disabled:opacity-85 disabled:cursor-not-allowed text-sm font-semibold`}
+                                    />
+                                    {q.questionType !== "true_false" && q.options.length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
+                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
+                                        title="Optie verwijderen"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* Feedback informational bars */}
+                        {q.questionType === "wheel_spin" ? (
+                          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 font-medium bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200/40">
+                            🎰 Spelers draaien aan dit rad voor punten! Tip: Gebruik getallen (+500, -250), "Verdubbelen", of "Bankroet" voor de leukste gok-ronde.
+                          </p>
+                        ) : q.questionType === "puzzle" ? (
+                          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 font-medium bg-purple-50/50 dark:bg-purple-950/20 p-2.5 rounded-lg border border-purple-200/40">
+                            🧩 Sorteervragen (puzzels) vereisen dat spelers de opties in exact deze volgorde schikken. Ideaal voor chronologie of procesvolgordes!
+                          </p>
+                        ) : q.questionType === "slider" ? (
+                          <p className="text-xs text-teal-600 dark:text-teal-400 mt-1 font-medium bg-teal-50/50 dark:bg-teal-950/20 p-2.5 rounded-lg border border-teal-200/40">
+                            🎚️ Schuifbalkvragen dagen spelers uit om de waarde te benaderen. De score is gebaseerd op de nabijheid van het getal!
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium font-display">
+                            Vink de correcte antwoordopties hierboven aan. Selecteer meerdere om een MULTI-keuze vraag te maken!
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Viewport Slide-Deck Navigation Row */}
+                      <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setActiveQuestionIdx(qIdx - 1)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition cursor-pointer"
+                        >
+                          <ArrowLeft className="w-3.5 h-3.5" /> Vorige Dia
+                        </button>
+                        
+                        {qIdx < questions.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveQuestionIdx(qIdx + 1)}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition cursor-pointer"
+                          >
+                            Volgende Dia <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleAddQuestion}
+                            className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-slate-100 text-indigo-600 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer"
+                          >
+                            + Extra Dia Toevoegen
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* SAVING TRIGGER BAR */}
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer text-base uppercase tracking-wider"
+              >
+                {editingQuizId ? "💾 Wijzigingen Opslaan" : "💾 Sla Quiz Op"}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </>
   )}

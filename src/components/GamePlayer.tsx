@@ -7,6 +7,7 @@ import { parseNicknameAndAvatar, ShapeIcon, parseQuizTitle } from "../avatarUtil
 import confetti from "canvas-confetti";
 import { LuckyWheel } from "./LuckyWheel";
 import { translations } from "../translations";
+import { sfx } from "../soundManager";
 
 interface GamePlayerProps {
   lang?: "nl" | "en";
@@ -412,6 +413,20 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     }
   }, [session?.status, session?.currentQuestionIndex]);
 
+  // Subtle acoustic cue when seeing active results (correct or incorrect)
+  useEffect(() => {
+    if (!session || !self || !activeQuestion) return;
+
+    if (session.status === "show_answer") {
+      const isCorrect = checkIsCorrect(self.currentAnswerIndex, activeQuestion);
+      if (isCorrect) {
+        sfx.playCorrect();
+      } else {
+        sfx.playIncorrect();
+      }
+    }
+  }, [session?.status, session?.currentQuestionIndex]);
+
   // Keep track of the last seen question index so we only reset answer state on real transitions
   const lastQuestionIdxRef = React.useRef<number | null>(null);
 
@@ -572,6 +587,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const submitAnswerToSupabase = async (answerValue: number) => {
     if (hasAnswered || !session || !playerUid) return;
 
+    // Play subtle answer selection audio cue
+    sfx.playSelectAnswer();
+
     try {
       const startTimeStamp = session.questionStartTime ? new Date(session.questionStartTime).getTime() : Date.now();
       const reactionDelay = Date.now() - startTimeStamp;
@@ -615,6 +633,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   };
 
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [progressPct, setProgressPct] = useState(100);
   const isAnsweringOpen = session?.status === "question";
 
   // Anti-cheat: Track tab exits and window unfocus during active questions
@@ -669,7 +688,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         const now = Date.now();
         const elapsedMs = now - start;
         const duration = session.questionDuration ?? 20;
+        const durationMs = duration * 1000;
+        const remainingMs = Math.max(0, durationMs - elapsedMs);
         setSecondsLeft(Math.max(0, duration - Math.floor(elapsedMs / 1000)));
+        setProgressPct(durationMs > 0 ? (remainingMs / durationMs) * 100 : 0);
       };
 
       updateTimer();
@@ -943,6 +965,21 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   <div className="bg-white/10 border border-white/15 px-2 py-0.5 rounded-full text-white font-bold font-mono text-[10px] flex items-center gap-1 shrink-0">
                     <Clock className="w-3 h-3 text-indigo-300 animate-pulse" /> {secondsLeft}s
                   </div>
+                </div>
+
+                {/* Real-time Visual Progress Bar */}
+                <div className="w-full bg-slate-950/40 border border-white/5 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+                  <motion.div
+                    className={`h-full rounded-full transition-all duration-100 ${
+                      progressPct > 50 
+                        ? "bg-emerald-500 shadow-md shadow-emerald-500/30" 
+                        : progressPct > 20 
+                          ? "bg-amber-500 shadow-md shadow-amber-500/30" 
+                          : "bg-rose-500 shadow-md shadow-rose-500/50 animate-pulse"
+                    }`}
+                    style={{ width: `${progressPct}%` }}
+                    initial={{ width: "100%" }}
+                  />
                 </div>
 
                 <h1 className="text-lg sm:text-xl font-bold font-display text-white leading-snug">
@@ -1249,7 +1286,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                       <button
                         onClick={() => handleSubmitMultipleAnswers()}
                         disabled={selectedIndices.length === 0}
-                        className="w-full mt-2 bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-650 text-white font-display font-black py-4 rounded-2xl border-b-6 border-indigo-800 focus:scale-[0.99] hover:scale-[1.01] shadow-lg transition-all uppercase tracking-widest text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="w-full mt-2 bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-display font-black py-4 rounded-2xl border-b-6 border-indigo-800 focus:scale-[0.99] hover:scale-[1.01] shadow-lg transition-all uppercase tracking-widest text-base cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                       >
                         Antwoord Insturen ({selectedIndices.length})
                       </button>
@@ -1285,7 +1322,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   <p className={`text-sm max-w-xs ${textMutedClass}`}>
                     Je was supersnel! Wacht even tot de rest klaar is of de tijd afloopt.
                   </p>
-                  <Loader2 className="w-6 h-6 animate-spin text-indigo-450" />
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
                 </div>
               )}
             </motion.div>
@@ -1338,7 +1375,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   </div>
 
                   <div className="bg-emerald-600/45 p-4 rounded-2xl border border-white/10 inline-block">
-                    <p className="text-xs text-emerald-250">Punten & Streak update</p>
+                    <p className="text-xs text-emerald-200">Punten & Streak update</p>
                     <h3 className="text-2xl font-mono font-bold text-white flex items-center gap-1 justify-center">
                       <Sparkles className="w-5 h-5 text-yellow-300 inline animate-spin-slow" /> +{getPointsEarnedForThisQuestion()} pt
                     </h3>
@@ -1485,19 +1522,19 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                             animate={{ x: 0, opacity: 1 }}
                             className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
                               isYou
-                                ? "bg-indigo-650/30 border-indigo-500 shadow-md"
+                                ? "bg-indigo-600/30 border-indigo-500 shadow-md"
                                 : "bg-slate-900/60 border-slate-800"
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="relative">
                                 <img src={pAvatar} alt="avatar" className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700" />
-                                <span className="absolute -top-1 -left-1 bg-indigo-650 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white text-white">
+                                <span className="absolute -top-1 -left-1 bg-indigo-600 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white text-white">
                                   {place}
                                 </span>
                               </div>
                               <div className="min-w-0 text-left">
-                                <p className="font-bold text-slate-205 text-sm truncate flex items-center gap-1.5">
+                                <p className="font-bold text-slate-300 text-sm truncate flex items-center gap-1.5">
                                   <span className="text-white">{pName.replace(/[:|~]/g, "")}</span>
                                   {isPVerified && (
                                     <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
@@ -1610,7 +1647,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   
                   <button
                     onClick={onExit}
-                    className="w-full bg-indigo-650 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
                   >
                     Klaar en Sluiten 🎉
                   </button>

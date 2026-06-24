@@ -131,10 +131,10 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
       };
     case "space":
       return {
-        bgClasses: "bg-slate-950 bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 text-indigo-150 transition-all duration-700 relative overflow-hidden",
+        bgClasses: "bg-slate-950 bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 text-indigo-200 transition-all duration-700 relative overflow-hidden",
         cardBg: "bg-slate-900/80 border border-indigo-900/40 shadow-2xl backdrop-blur-xs",
         textColor: "text-indigo-50 dark:text-indigo-100",
-        accentColor: "bg-indigo-650 border-indigo-800",
+        accentColor: "bg-indigo-600 border-indigo-800",
         emoji: "🪐",
         name: "Kosmisch",
       };

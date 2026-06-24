@@ -6,6 +6,7 @@ import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
 import { translations } from "../translations";
+import { sfx } from "../soundManager";
 
 interface GameHostProps {
   lang?: "nl" | "en";
@@ -47,6 +48,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const [isSkippingLeaderboard, setIsSkippingLeaderboard] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isFetchingSessionAndPlayersRef = useRef(false);
+  const initialFetchDoneRef = useRef(false);
 
   // States & ref for background lobby music
   const [selectedLobbyMusicUrl, setSelectedLobbyMusicUrl] = useState(() => {
@@ -303,7 +305,14 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           isHost: p.is_host,
           joinedAt: p.joined_at,
         }));
+        
+        // Play audio cue when a new player joins the lobby
+        if (initialFetchDoneRef.current && list.length > players.length) {
+          sfx.playLobbyJoin();
+        }
+
         setPlayers(list);
+        initialFetchDoneRef.current = true;
       }
     } catch (err) {
       console.error("Fout tijdens data synchronisatie:", err);
@@ -1310,7 +1319,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <p className="text-indigo-400 text-xs font-bold uppercase tracking-widest">
                       {session.currentQuestionIndex === 0 ? "QUIZ SESSIE" : "VOLGENDE VRAAG"}
                     </p>
-                    <span className="inline-block px-3 py-1 bg-indigo-950 border border-indigo-805 text-indigo-200 text-xs font-semibold rounded-full font-display">
+                    <span className="inline-block px-3 py-1 bg-indigo-950 border border-indigo-800 text-indigo-200 text-xs font-semibold rounded-full font-display">
                       Vraag {session.currentQuestionIndex + 1} / {session.totalQuestions}
                     </span>
                   </div>
@@ -1348,7 +1357,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                         className={`inline-flex items-center justify-center w-36 h-36 rounded-full border-4 ${
                           countdownVal === "GO!" 
                             ? "border-emerald-500 bg-emerald-950/65 text-emerald-300" 
-                            : "border-indigo-505 bg-indigo-950/65 text-indigo-300"
+                            : "border-indigo-500 bg-indigo-950/65 text-indigo-300"
                         } text-6xl font-black font-display`}
                       >
                         {countdownVal}
@@ -1462,7 +1471,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider">
                               Schuif naar de juiste waarde 🎚️
                             </h2>
-                            <p className="text-xs text-slate-450 font-bold italic">
+                            <p className="text-xs text-slate-400 font-bold italic">
                               Kies een waarde tussen {min.toLocaleString("nl-NL")} en {max.toLocaleString("nl-NL")}!
                             </p>
                             
@@ -1479,7 +1488,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                 })}
                               </div>
                             ) : (
-                              <div className="relative h-12 bg-slate-950 rounded-2xl border border-slate-850 my-6 flex items-center justify-between px-5 text-xs font-mono font-bold text-slate-400">
+                              <div className="relative h-12 bg-slate-950 rounded-2xl border border-slate-800 my-6 flex items-center justify-between px-5 text-xs font-mono font-bold text-slate-400">
                                 <span className="bg-slate-900 px-3 py-1 rounded-xl border border-slate-800/80">Min: {min.toLocaleString("nl-NL")}</span>
                                 <span className="text-teal-400 font-medium tracking-wide">In stappen van: {step.toLocaleString("nl-NL")}</span>
                                 <span className="bg-slate-900 px-3 py-1 rounded-xl border border-slate-800/80">Max: {max.toLocaleString("nl-NL")}</span>
@@ -1501,12 +1510,12 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="grid md:grid-cols-2 gap-4">
                       {currentQuestion.options.map((option, idx) => {
                         const styleInfo = [
-                          { bg: "bg-red-500 border-red-750", label: "🔴" },
-                          { bg: "bg-blue-500 border-blue-750", label: "🔵" },
+                          { bg: "bg-red-500 border-red-700", label: "🔴" },
+                          { bg: "bg-blue-500 border-blue-700", label: "🔵" },
                           { bg: "bg-yellow-500 border-yellow-600 text-slate-950", label: "🟡" },
-                          { bg: "bg-green-500 border-green-755", label: "🟢" },
-                          { bg: "bg-purple-500 border-purple-750", label: "🟣" },
-                          { bg: "bg-orange-500 border-orange-755", label: "🟠" },
+                          { bg: "bg-green-500 border-green-700", label: "🟢" },
+                          { bg: "bg-purple-500 border-purple-700", label: "🟣" },
+                          { bg: "bg-orange-500 border-orange-700", label: "🟠" },
                         ];
                         const style = styleInfo[idx % styleInfo.length];
                         return (
@@ -1646,7 +1655,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                     return (
                                       <div key={num} className="space-y-1">
                                         <div className="flex justify-between items-center text-xs font-bold">
-                                          <span className={`flex items-center gap-1.5 ${isCorrectVal ? "text-emerald-400 font-extrabold text-sm" : "text-slate-350"}`}>
+                                          <span className={`flex items-center gap-1.5 ${isCorrectVal ? "text-emerald-400 font-extrabold text-sm" : "text-slate-400"}`}>
                                             <span>Getal {num.toLocaleString("nl-NL")}</span>
                                             {isCorrectVal && (
                                               <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase flex items-center gap-0.5 animate-pulse">
@@ -1847,7 +1856,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <p className="text-slate-400">Score na vraag {session.currentQuestionIndex + 1} / {session.totalQuestions}</p>
                   </div>
 
-                  <div className="bg-slate-950 border border-slate-850 rounded-3xl p-6 md:p-8 max-w-2xl mx-auto space-y-4">
+                  <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 md:p-8 max-w-2xl mx-auto space-y-4">
                     {sortedPlayers.length === 0 ? (
                       <div className="text-center text-slate-500 py-6 italic">Geen spelergegevens beschikbaar.</div>
                     ) : (
@@ -2010,9 +2019,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   🔒
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-xs sm:text-sm mb-0.5">???</span>
-                                <span className="text-slate-705 font-mono text-[10px] sm:text-xs font-semibold mb-1.5">0 pt</span>
+                                <span className="text-slate-400 font-mono text-[10px] sm:text-xs font-semibold mb-1.5">0 pt</span>
                                 <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-20 sm:h-28 md:h-36 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-850 font-black font-display">2</span>
+                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-500 font-black font-display">2</span>
                                 </div>
                               </div>
                             );
@@ -2061,9 +2070,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   🔒
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-xs sm:text-base mb-0.5">???</span>
-                                <span className="text-slate-705 font-mono text-[10px] sm:text-sm font-semibold mb-2">0 pt</span>
+                                <span className="text-slate-400 font-mono text-[10px] sm:text-sm font-semibold mb-2">0 pt</span>
                                 <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-28 sm:h-38 md:h-46 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-850 font-black font-display">1</span>
+                                  <span className="text-2xl sm:text-4xl md:text-5xl text-slate-500 font-black font-display">1</span>
                                 </div>
                               </div>
                             );
@@ -2087,7 +2096,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   <img src={a2} alt="avatar" className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-slate-950 border-2 sm:border-4 border-amber-800 rounded-full shadow-lg relative z-10 object-cover" />
                                   <span className="absolute -bottom-1 -right-1 bg-amber-700 text-white text-[8px] sm:text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display font-bold">3</span>
                                 </div>
-                                <span className="text-amber-655 font-display font-extrabold text-[10px] sm:text-xs md:text-base mb-0.5 max-w-full truncate px-1 text-center flex items-center justify-center gap-1" title={n2}>
+                                <span className="text-amber-600 font-display font-extrabold text-[10px] sm:text-xs md:text-base mb-0.5 max-w-full truncate px-1 text-center flex items-center justify-center gap-1" title={n2}>
                                   {n2}
                                   {v2 && (
                                     <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
@@ -2096,7 +2105,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   )}
                                 </span>
                                 <span className="text-slate-400 font-mono text-[9px] sm:text-xs font-bold mb-1.5">{sortedPlayers[2].score ?? 0} pt</span>
-                                <div className="w-full bg-linear-to-b from-amber-700 to-amber-900 border-t border-amber-655 h-16 sm:h-22 md:h-28 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center shadow-xl relative overflow-hidden group-hover:from-amber-650 group-hover:to-amber-850 transition-all">
+                                <div className="w-full bg-linear-to-b from-amber-700 to-amber-900 border-t border-amber-600 h-16 sm:h-22 md:h-28 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center shadow-xl relative overflow-hidden group-hover:from-amber-600 group-hover:to-amber-800 transition-all">
                                   <span className="text-2xl sm:text-3xl md:text-4xl text-slate-950 font-black font-display tracking-tight leading-none drop-shadow-md">3</span>
                                   <span className="text-[8px] sm:text-[9px] text-amber-200 uppercase font-black tracking-widest mt-1">Brons</span>
                                 </div>
@@ -2109,9 +2118,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   🔒
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-[10px] sm:text-sm mb-0.5">???</span>
-                                <span className="text-slate-705 font-mono text-[9px] sm:text-xs font-semibold mb-1.5">0 pt</span>
+                                <span className="text-slate-400 font-mono text-[9px] sm:text-xs font-semibold mb-1.5">0 pt</span>
                                 <div className="w-full bg-slate-950/10 border-t border-slate-900/60 h-16 sm:h-22 md:h-28 rounded-t-2xl sm:rounded-t-3xl flex flex-col items-center justify-center border border-slate-800/20 shadow-inner">
-                                  <span className="text-xl sm:text-3xl md:text-4xl text-slate-850 font-bold font-display">3</span>
+                                  <span className="text-xl sm:text-3xl md:text-4xl text-slate-500 font-bold font-display">3</span>
                                 </div>
                               </div>
                             );
@@ -2136,8 +2145,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                 <div className="absolute -right-2 -bottom-2 bg-indigo-500/5 w-16 h-16 rounded-full blur-xl pointer-events-none" />
                                 <div className="relative shrink-0">
                                   <div className="absolute inset-0 bg-indigo-400/10 rounded-full blur-xs scale-110" />
-                                  <img src={a3} alt="avatar" className="w-13 h-13 rounded-full border-2 border-indigo-450 bg-slate-950 shadow-md z-10 relative" />
-                                  <span className="absolute -top-1 -left-1 bg-indigo-650 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">4</span>
+                                  <img src={a3} alt="avatar" className="w-13 h-13 rounded-full border-2 border-indigo-400 bg-slate-950 shadow-md z-10 relative" />
+                                  <span className="absolute -top-1 -left-1 bg-indigo-600 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">4</span>
                                 </div>
                                 <div className="min-w-0 text-left relative z-10">
                                   <div className="flex items-center gap-1.5 max-w-full">
@@ -2179,8 +2188,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                 <div className="absolute -right-2 -bottom-2 bg-indigo-500/5 w-16 h-16 rounded-full blur-xl pointer-events-none" />
                                 <div className="relative shrink-0">
                                   <div className="absolute inset-0 bg-indigo-400/10 rounded-full blur-xs scale-110" />
-                                  <img src={a4} alt="avatar" className="w-13 h-13 rounded-full border-2 border-indigo-450 bg-slate-950 shadow-md z-10 relative" />
-                                  <span className="absolute -top-1 -left-1 bg-indigo-650 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">5</span>
+                                  <img src={a4} alt="avatar" className="w-13 h-13 rounded-full border-2 border-indigo-400 bg-slate-950 shadow-md z-10 relative" />
+                                  <span className="absolute -top-1 -left-1 bg-indigo-600 text-white text-[10px] font-black font-mono w-5.5 h-5.5 rounded-full flex items-center justify-center border-2 border-slate-950 z-20 shadow">5</span>
                                 </div>
                                 <div className="min-w-0 text-left relative z-10">
                                   <div className="flex items-center gap-1.5 max-w-full">
@@ -2255,7 +2264,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="text-left space-y-8 max-w-4xl mx-auto px-4 pb-12 animate-fade-in text-slate-200">
                       {/* Section 1: All Player Points Overview */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-850 pb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                           <div>
                             <h2 className="text-lg font-bold font-display text-white">Eindstand Spelers</h2>
                             <p className="text-xs text-slate-400 mt-0.5">Snel overzicht van alle scores en placements</p>
@@ -2277,7 +2286,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                           {sortedPlayers.map((player, idx) => {
                             const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(player.nickname || "");
                             return (
-                              <div key={player.id || idx} className="flex items-center justify-between bg-slate-850 p-4 rounded-xl border border-slate-800/60 hover:border-slate-800 transition">
+                              <div key={player.id || idx} className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-800/60 hover:border-slate-800 transition">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-slate-800 font-display font-black text-sm flex items-center justify-center text-slate-300">
                                     {idx + 1}
@@ -2325,7 +2334,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                           return (
                             <div key={qIdx} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
                               {/* Question summary row */}
-                              <div className="bg-slate-850 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800">
+                              <div className="bg-slate-800 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800">
                                 <div className="space-y-1.5 max-w-xl">
                                   <span className="text-[10px] text-indigo-400 font-black uppercase tracking-wider block font-mono">
                                     VRAAG {qIdx + 1} • {q.points || 1000} PT
@@ -2353,11 +2362,11 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                     <div key={oIdx} className={`p-2.5 rounded-lg border flex items-center justify-between ${
                                       isCorrectAns 
                                         ? "bg-emerald-950/25 border-emerald-900/70 text-emerald-300" 
-                                        : "bg-slate-850/45 border-slate-850 text-slate-500"
+                                        : "bg-slate-800/45 border-slate-800 text-slate-500"
                                     }`}>
                                       <span className="truncate pr-2 font-medium">{oIdx + 1}. {opt}</span>
                                       {isCorrectAns && (
-                                        <span className="bg-emerald-550/20 text-emerald-400 px-1.5 py-0.5 rounded text-[9px] font-black uppercase border border-emerald-950/80">
+                                        <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[9px] font-black uppercase border border-emerald-950/80">
                                           GOED ANTWOORD
                                         </span>
                                       )}
@@ -2381,10 +2390,10 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                     return (
                                       <div key={player.id} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
                                         pAnsweredIdx === null
-                                          ? "bg-slate-855/30 border-slate-800/80 text-slate-500"
+                                          ? "bg-slate-800/30 border-slate-800/80 text-slate-500"
                                           : isCorrect
-                                            ? "bg-emerald-950/20 border-emerald-900/60 text-emerald-250"
-                                            : "bg-red-950/20 border-red-900/60 text-red-250"
+                                            ? "bg-emerald-950/20 border-emerald-900/60 text-emerald-300"
+                                            : "bg-red-950/20 border-red-900/60 text-red-300"
                                       }`}>
                                         <div className="flex items-center gap-2 truncate flex-1 min-w-0">
                                           <img src={cleanNickname.avatarUrl} alt="" className="w-5 h-5 rounded-full border border-slate-800 shrink-0" />

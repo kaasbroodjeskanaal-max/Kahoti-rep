@@ -5,8 +5,9 @@ import QuizManager from "./components/QuizManager";
 import GameHost from "./components/GameHost";
 import GamePlayer from "./components/GamePlayer";
 import { Quiz } from "./types";
-import { Play, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2 } from "lucide-react";
+import { Play, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2, Volume2, VolumeX } from "lucide-react";
 import { translations } from "./translations";
+import { sfx } from "./soundManager";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
@@ -59,6 +60,11 @@ export default function App() {
   // Darkmode State
   const [isDark, setIsDark] = useState(() => {
     return localStorage.getItem("quiz_dark_mode") === "true";
+  });
+
+  // Sound Effects State
+  const [sfxEnabled, setSfxEnabled] = useState(() => {
+    return sfx.isEnabled();
   });
   
   const [activeModal, setActiveModal] = useState<"rules" | "privacy" | "terms" | null>(null);
@@ -217,8 +223,20 @@ export default function App() {
           <button
             onClick={() => setIsDark(!isDark)}
             className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+            title={lang === "nl" ? "Donkere / lichte modus" : "Dark / light mode"}
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => {
+              const next = !sfxEnabled;
+              sfx.setEnabled(next);
+              setSfxEnabled(next);
+            }}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+            title={lang === "nl" ? (sfxEnabled ? "Geluidseffecten dempen" : "Geluidseffecten inschakelen") : (sfxEnabled ? "Mute sound effects" : "Unmute sound effects")}
+          >
+            {sfxEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
         </div>
       </header>
