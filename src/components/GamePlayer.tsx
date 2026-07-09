@@ -32,6 +32,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const isLoadingRef = React.useRef<boolean>(true);
   const isFetchingQuestionsRef = React.useRef<boolean>(false);
   const isFetchingSessionRef = React.useRef<boolean>(false);
+  const lastInitializedQuestionIdxRef = React.useRef<number | null>(null);
+  const localQuestionStartRef = React.useRef<number | null>(null);
 
   const updateQuestions = (newQuestions: Question[]) => {
     questionsRef.current = newQuestions;
@@ -379,12 +381,67 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sessions", filter: `id=eq.${sessionId}` },
-        () => fetchSessionAndSelf()
+        (payload) => {
+          if (payload.new) {
+            const sessionData = payload.new as any;
+            setSession({
+              id: sessionData.id,
+              hostId: sessionData.host_id,
+              code: sessionData.code,
+              status: sessionData.status,
+              quizId: sessionData.quiz_id,
+              quizTitle: sessionData.quiz_title,
+              currentQuestionIndex: sessionData.current_question_index,
+              questionStartTime: sessionData.question_start_time,
+              questionDuration: sessionData.question_duration,
+              totalQuestions: sessionData.total_questions,
+            });
+
+            // Fetch questions if not cached
+            if (questionsRef.current.length === 0 && sessionData.quiz_id && !isFetchingQuestionsRef.current) {
+              isFetchingQuestionsRef.current = true;
+              supabase
+                .from("quizzes")
+                .select("questions")
+                .eq("id", sessionData.quiz_id)
+                .single()
+                .then((res) => {
+                  isFetchingQuestionsRef.current = false;
+                  if (!res.error && res.data) {
+                    updateQuestions(res.data.questions || []);
+                  }
+                });
+            }
+          } else {
+            fetchSessionAndSelf();
+          }
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "players", filter: `id=eq.${playerUid}` },
-        () => fetchSessionAndSelf()
+        (payload) => {
+          if (payload.new) {
+            const playerData = payload.new as any;
+            setSelf({
+              id: playerData.id,
+              nickname: playerData.nickname,
+              score: playerData.score ?? 0,
+              streak: playerData.streak ?? 0,
+              currentAnswerIndex: playerData.current_answer_index,
+              currentAnswerTime: playerData.current_answer_time,
+              isHost: playerData.is_host,
+              joinedAt: playerData.joined_at,
+            });
+            if (playerData.current_answer_index !== null) {
+              setHasAnswered(true);
+            } else {
+              setHasAnswered(false);
+            }
+          } else {
+            fetchSessionAndSelf();
+          }
+        }
       )
       .subscribe();
 
@@ -591,7 +648,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     sfx.playSelectAnswer();
 
     try {
-      const startTimeStamp = session.questionStartTime ? new Date(session.questionStartTime).getTime() : Date.now();
+      const startTimeStamp = localQuestionStartRef.current ?? (session.questionStartTime ? new Date(session.questionStartTime).getTime() : Date.now());
       const reactionDelay = Date.now() - startTimeStamp;
 
       setHasAnswered(true);
@@ -683,8 +740,27 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
 
   useEffect(() => {
     if (session?.status === "question" && session?.questionStartTime) {
+      const qIdx = session.currentQuestionIndex ?? 0;
+      
+      // If we haven't initialized the local start time for this question index yet:
+      if (lastInitializedQuestionIdxRef.current !== qIdx) {
+        lastInitializedQuestionIdxRef.current = qIdx;
+        
+        const dbStart = new Date(session.questionStartTime).getTime();
+        const now = Date.now();
+        const elapsedSinceDbStart = now - dbStart;
+        
+        // If we transitioned naturally from countdown, elapsedSinceDbStart is usually small (e.g. < 5000ms).
+        // If they refreshed the page or joined late, we use the dbStart as fallback to keep sync.
+        if (elapsedSinceDbStart > 0 && elapsedSinceDbStart < 5000) {
+          localQuestionStartRef.current = now;
+        } else {
+          localQuestionStartRef.current = dbStart;
+        }
+      }
+
       const updateTimer = () => {
-        const start = new Date(session.questionStartTime!).getTime();
+        const start = localQuestionStartRef.current ?? new Date(session.questionStartTime!).getTime();
         const now = Date.now();
         const elapsedMs = now - start;
         const duration = session.questionDuration ?? 20;
@@ -697,8 +773,11 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       updateTimer();
       const timerInterval = setInterval(updateTimer, 100);
       return () => clearInterval(timerInterval);
+    } else {
+      localQuestionStartRef.current = null;
+      lastInitializedQuestionIdxRef.current = null;
     }
-  }, [session?.status, session?.questionStartTime, session?.questionDuration]);
+  }, [session?.status, session?.questionStartTime, session?.questionDuration, session?.currentQuestionIndex]);
 
   const firstQ = questions[0];
   const playerTheme = activeQuestion?.theme || firstQ?.theme || "default";

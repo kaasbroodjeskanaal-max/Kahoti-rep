@@ -45,7 +45,7 @@ export default function App() {
 
   // Language state (nl or en)
   const [lang, setLang] = useState<"nl" | "en">(() => {
-    return (localStorage.getItem("kahoti_lang") as "nl" | "en") || "nl";
+    return (localStorage.getItem("cahoti_lang") as "nl" | "en") || "nl";
   });
 
   const t = translations[lang];
@@ -193,27 +193,33 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white dark:bg-[#050505] text-slate-900 dark:text-white flex flex-col font-sans selection:bg-purple-200 dark:selection:bg-purple-900 relative">
       
+      {/* Name Change Announcement Banner */}
+      <div className="bg-amber-500/10 dark:bg-amber-500/5 text-amber-800 dark:text-amber-200 text-xs font-semibold py-3 px-4 text-center relative z-50 border-b border-amber-500/20 flex items-center justify-center gap-2">
+        <Sparkles className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 animate-pulse" />
+        <span>{t.nameChangeNotice}</span>
+      </div>
+
       {/* Modern Minimal Header */}
       <header className="px-6 md:px-12 py-6 w-full flex items-center justify-between z-50 relative sticky top-0 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-600/30">
-            K
+            C
           </div>
           <span className="font-extrabold font-display text-xl tracking-tight">
-            Kahoti
+            Cahoti
           </span>
         </div>
         
         <div className="flex items-center gap-2 p-1.5 rounded-full bg-slate-100 dark:bg-slate-900/50 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/50">
           <button
-            onClick={() => { setLang("nl"); localStorage.setItem("kahoti_lang", "nl"); }}
+            onClick={() => { setLang("nl"); localStorage.setItem("cahoti_lang", "nl"); }}
             className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "nl" ? "bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400" : "text-slate-500 opacity-60 hover:opacity-100"}`}
             title="Nederlands"
           >
             NL
           </button>
           <button
-            onClick={() => { setLang("en"); localStorage.setItem("kahoti_lang", "en"); }}
+            onClick={() => { setLang("en"); localStorage.setItem("cahoti_lang", "en"); }}
             className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "en" ? "bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400" : "text-slate-500 opacity-60 hover:opacity-100"}`}
             title="English"
           >
