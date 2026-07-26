@@ -1,7 +1,7 @@
 export const translations = {
   nl: {
     // Landing
-    title: "Cahoti",
+    title: "Kahoti-Rep",
     subtitle: "Realtime Quiz- en Enquêteplatform",
     tagline: "De ultieme Kahoot-stijl quizervaring! Maak eenvoudig eigen quizzen met afbeeldingen, deel de code en ontdek wie de slimste is op het realtime leaderboard.",
     joinGame: "Meedoen aan Spel",
@@ -25,12 +25,12 @@ export const translations = {
     privacyDesc: "Wij respecteren uw privacy. Uw gegevens (zoals uw nickname) worden gebruikt om de live game te faciliteren en worden veilig opgeslagen in onze database. We delen geen persoonlijke informatie met derden zonder expliciete toestemming.",
     terms: "Algemene Voorwaarden",
     termsTitle: "Algemene Voorwaarden",
-    termsDesc: "Door Cahoti te gebruiken, stemt u ermee in het platform op een respectvolle manier te gebruiken. Misbruik, haatzaaien of het gebruik van ongepaste namen kan leiden tot directe verwijdering uit de sessie. Wij sturen op een leuke en veilige omgeving voor iedereen.",
+    termsDesc: "Door Kahoti-Rep te gebruiken, stemt u ermee in het platform op een respectvolle manier te gebruiken. Misbruik, haatzaaien of het gebruik van ongepaste namen kan leiden tot directe verwijdering uit de sessie. Wij sturen op een leuke en veilige omgeving voor iedereen.",
     rules: "Spelregels",
-    rulesTitle: "Spelregels van Cahoti",
+    rulesTitle: "Spelregels van Kahoti-Rep",
     rulesDesc: "1. Vragen hebben een tijdslimiet.\n2. Meerdere opeenvolgende juiste antwoorden leveren een Streak Bonus op!\n3. Het type vraag bepaalt de score: wees precies in de open vragen of snel bij een puzzel.\n4. Spelen zonder hulpmiddelen: cheaten is absoluut verboden!\n5. Gebruik altijd je eigen naam zodat het direct herkenbaar is dat jij het bent.\n6. Hou het gezellig!",
-    footer: "Cahoti. Gebouwd met Supabase & PostgreSQL.",
-    nameChangeNotice: "Cahoti was voorheen bekend als Kahoti. We hebben de naam aangepast omdat het te veel op een ander platform leek.",
+    footer: "Kahoti-Rep. Gebouwd met Supabase & PostgreSQL.",
+    nameChangeNotice: "Kahoti-Rep was voorheen bekend als Kahoti. We hebben de naam aangepast omdat het te veel op een ander platform leek.",
     
     // Theme
     lightMode: "Lichte modus",
@@ -41,7 +41,7 @@ export const translations = {
     rateLimitExceeded: "Verzoek Snelheidslimiet Overschreden",
     blockedReason: "Het systeem heeft een ongebruikelijk hoge activiteit gedetecteerd vanaf deze browser. De client is tijdelijk geblokkeerd om serveroverbelasting en onnodig egress-verbruik te voorkomen.",
     cooldownPeriod: "Tijdelijke Afkoelperiode Actief",
-    securityTitle: "Cahoti Systeembeveiliging & DDoS Beheersing",
+    securityTitle: "Kahoti-Rep Systeembeveiliging & DDoS Beheersing",
     
     // Quick alerts
     waitExit: "Niet zo snel! Je hebt net een live sessie gestorven/gestopt. Wacht nog {seconds} seconden om een nieuwe op te starten.",
@@ -111,7 +111,7 @@ export const translations = {
   },
   en: {
     // Landing
-    title: "Cahoti",
+    title: "Kahoti-Rep",
     subtitle: "Realtime Quiz & Survey Platform",
     tagline: "The ultimate Kahoot-style quiz experience! Create custom quizzes with images, share the lobby code, and see who's smartest on the real-time leaderboard.",
     joinGame: "Join Game",
@@ -135,12 +135,12 @@ export const translations = {
     privacyDesc: "We respect your privacy. Your data (like your nickname) is used to facilitate the live game and is securely stored in our database. We don't share personal info with third parties without explicit consent.",
     terms: "Terms & Conditions",
     termsTitle: "Terms & Conditions",
-    termsDesc: "By using Cahoti, you agree to use the platform respectfully. Abuse, hate speech or inappropriate names may result in immediate ban from the session. We strive for a fun and secure environment for everyone.",
+    termsDesc: "By using Kahoti-Rep, you agree to use the platform respectfully. Abuse, hate speech or inappropriate names may result in immediate ban from the session. We strive for a fun and secure environment for everyone.",
     rules: "Game Rules",
-    rulesTitle: "Cahoti Game Rules",
+    rulesTitle: "Kahoti-Rep Game Rules",
     rulesDesc: "1. Questions have a time limit.\n2. Consecutive correct answers award a Streak Bonus!\n3. The question type determines scoring strategy: be precise in open answers or fast with puzzles.\n4. Play fair: cheating is strictly forbidden!\n5. Always use your real name so it is recognizable to everyone that you are you.\n6. Keep it friendly!",
-    footer: "Cahoti. Powered by Supabase & PostgreSQL.",
-    nameChangeNotice: "Cahoti was formerly known as Kahoti. We updated the name because it resembled another platform too much.",
+    footer: "Kahoti-Rep. Powered by Supabase & PostgreSQL.",
+    nameChangeNotice: "Kahoti-Rep was formerly known as Kahoti. We updated the name because it resembled another platform too much.",
     
     // Theme
     lightMode: "Light Mode",
@@ -151,7 +151,7 @@ export const translations = {
     rateLimitExceeded: "Request Rate Limit Exceeded",
     blockedReason: "The system detected unusually high activity from this browser. The client has been temporarily blocked to prevent server overload and excess egress usage.",
     cooldownPeriod: "Temporary Cooldown Period Active",
-    securityTitle: "Cahoti System Security & DDoS Mitigation",
+    securityTitle: "Kahoti-Rep System Security & DDoS Mitigation",
     
     // Quick alerts
     waitExit: "Not so fast! You just stopped/exited a live session. Please wait {seconds} seconds before starting a new one.",

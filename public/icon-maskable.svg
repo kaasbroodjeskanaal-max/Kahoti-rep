@@ -1,16 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="kahoti-grad-mask" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#06b6d4" />
+    <linearGradient id="kr-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#ec4899" />
     </linearGradient>
+    <linearGradient id="kr-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="40" />
+    </filter>
   </defs>
   <!-- Full square background for maskable compatibility -->
   <rect width="512" height="512" fill="#020617" />
-  <circle cx="256" cy="256" r="210" fill="url(#kahoti-grad-mask)" opacity="0.12" />
-  <!-- Styled K representation -->
-  <rect x="160" y="130" width="55" height="252" rx="14" fill="#10b981" />
-  <path d="M215 256 L325 146 C335 136 351 136 361 146 C371 156 371 172 361 182 L266 277 Z" fill="#06b6d4" />
-  <path d="M215 256 L325 366 C335 376 335 392 325 402 C315 412 299 412 289 402 L194 307 Z" fill="#8b5cf6" />
-  <path d="M360 250 Q385 250 385 225 Q385 250 410 250 Q385 250 385 275 Q385 250 360 250 Z" fill="#fbbf24" />
+  
+  <circle cx="256" cy="256" r="160" fill="url(#kr-grad-1)" opacity="0.4" filter="url(#glow)" />
+  
+  <g transform="translate(180, 256)">
+    <rect x="-30" y="-30" width="200" height="60" rx="30" transform="rotate(-45)" fill="url(#kr-grad-2)" />
+    <rect x="-30" y="-30" width="200" height="60" rx="30" transform="rotate(45)" fill="url(#kr-grad-2)" />
+  </g>
+  <rect x="140" y="126" width="60" height="260" rx="30" fill="url(#kr-grad-1)" />
+  
+  <path d="M 360 210 Q 390 210 390 180 Q 390 210 420 210 Q 390 210 390 240 Q 390 210 360 210 Z" fill="#ffffff" opacity="0.9" />
 </svg>

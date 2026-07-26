@@ -364,7 +364,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       </div>
 
       <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-center mb-8 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-sm">
-        Kahoti Play
+        Kahoti-Rep Play
       </h1>
 
       <div className="w-full bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] p-8 shadow-2xl shadow-purple-900/10 dark:shadow-purple-900/30 border border-slate-200/50 dark:border-slate-800/80 relative overflow-hidden">

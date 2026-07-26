@@ -4,8 +4,8 @@ class SoundEffectsManager {
 
   constructor() {
     if (typeof window !== "undefined") {
-      this.enabled = localStorage.getItem("kahoti_sfx_enabled") !== "false";
-      this.volume = parseFloat(localStorage.getItem("kahoti_sfx_volume") || "0.5");
+      this.enabled = localStorage.getItem("kahoti_rep_sfx_enabled") !== "false";
+      this.volume = parseFloat(localStorage.getItem("kahoti_rep_sfx_volume") || "0.5");
     }
   }
 
@@ -16,7 +16,7 @@ class SoundEffectsManager {
   public setEnabled(enabled: boolean) {
     this.enabled = enabled;
     if (typeof window !== "undefined") {
-      localStorage.setItem("kahoti_sfx_enabled", String(enabled));
+      localStorage.setItem("kahoti_rep_sfx_enabled", String(enabled));
     }
   }
 
@@ -27,7 +27,7 @@ class SoundEffectsManager {
   public setVolume(volume: number) {
     this.volume = Math.max(0, Math.min(1, volume));
     if (typeof window !== "undefined") {
-      localStorage.setItem("kahoti_sfx_volume", String(this.volume));
+      localStorage.setItem("kahoti_rep_sfx_volume", String(this.volume));
     }
   }
 

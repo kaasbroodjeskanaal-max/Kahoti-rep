@@ -1,22 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="kahoti-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5" />
-      <stop offset="100%" stop-color="#06b6d4" />
+    <linearGradient id="kr-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#ec4899" />
     </linearGradient>
+    <linearGradient id="kr-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="40" />
+    </filter>
   </defs>
   <!-- Beautiful Rounded Dark Slate Background -->
   <rect width="512" height="512" rx="112" fill="#020617" />
-  <!-- Radiant background orb -->
-  <circle cx="256" cy="256" r="190" fill="url(#kahoti-grad)" opacity="0.15" />
-  <!-- Left column bar (Emerald quiz shape) -->
-  <rect x="150" y="120" width="60" height="272" rx="16" fill="#10b981" />
-  <!-- Top Diagonal branch (Teal quiz shape) -->
-  <path d="M210 256 L330 136 C340 126 356 126 366 136 C376 146 376 162 366 172 L266 272 Z" fill="#06b6d4" />
-  <!-- Bottom Diagonal branch (Purple quiz shape) -->
-  <path d="M210 256 L334 380 C344 390 344 406 334 416 C324 426 308 426 298 416 L178 296" fill="#8b5cf6" opacity="0.9" />
-  <!-- Play Button Accent Sparkle in center -->
-  <polygon points="210,256 178,296 150,256" fill="#fbbf24" />
-  <!-- Small Star Sparkle -->
-  <path d="M370 240 Q400 240 400 210 Q400 240 430 240 Q400 240 400 270 Q400 240 370 240 Z" fill="#fbbf24" />
+  
+  <!-- Glowing orb behind -->
+  <circle cx="256" cy="256" r="160" fill="url(#kr-grad-1)" opacity="0.4" filter="url(#glow)" />
+  
+  <!-- Right Diagonal Branches -->
+  <g transform="translate(180, 256)">
+    <rect x="-30" y="-30" width="200" height="60" rx="30" transform="rotate(-45)" fill="url(#kr-grad-2)" />
+    <rect x="-30" y="-30" width="200" height="60" rx="30" transform="rotate(45)" fill="url(#kr-grad-2)" />
+  </g>
+  
+  <!-- Left Pillar -->
+  <rect x="140" y="126" width="60" height="260" rx="30" fill="url(#kr-grad-1)" />
+  
+  <!-- Rep Sparkle -->
+  <path d="M 360 210 Q 390 210 390 180 Q 390 210 420 210 Q 390 210 390 240 Q 390 210 360 210 Z" fill="#ffffff" opacity="0.9" />
 </svg>

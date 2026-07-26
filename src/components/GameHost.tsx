@@ -1089,7 +1089,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             <div className="flex items-center gap-3">
               <img 
                 src="https://cdn.imageurlgenerator.com/uploads/9df1cd72-ee23-4abc-8f99-c7bf3a38bebc.jpeg"
-                alt="Kahoti Logo"
+                alt="Kahoti-Rep Logo"
                 className="w-10 h-10 object-cover rounded-xl border border-slate-800 shadow-xs shrink-0"
                 referrerPolicy="no-referrer"
               />
