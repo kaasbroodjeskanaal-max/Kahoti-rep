@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import { GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders, GripVertical } from "lucide-react";
+import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders, GripVertical, Flame, Crown, Medal, Lock, Dices, ListOrdered, Lightbulb, Snowflake, Sun, Palmtree, Ghost, Zap, Gamepad2, Ban, Search, Users, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, ShapeIcon, parseQuizTitle } from "../avatarUtils";
 import confetti from "canvas-confetti";
@@ -54,6 +54,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
 
   const [allPlayersSorted, setAllPlayersSorted] = useState<{ id: string; nickname: string; score: number }[]>([]);
   const [playerRank, setPlayerRank] = useState<number | null>(null);
+  const [playerEndTab, setPlayerEndTab] = useState<"podium" | "ranking">("podium");
+  const [playerRankingSearch, setPlayerRankingSearch] = useState<string>("");
 
   // Anti-cheat tracking states
   const [isCheatingBlocked, setIsCheatingBlocked] = useState(false);
@@ -65,6 +67,11 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   // States & Ref for player lobby music
   const [selectedPlayerLobbyMusicUrl, setSelectedPlayerLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
   const playerLobbyAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  // States & Ref for start intro video (eenmalig bij aanvang van de quiz)
+  const [hasWatchedIntro, setHasWatchedIntro] = useState(false);
+  const [isIntroMuted, setIsIntroMuted] = useState(false);
+  const introVideoRef = React.useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!sessionId || session?.status !== "lobby") return;
@@ -206,7 +213,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
 
       fetchScoresAndRanking();
     }
-  }, [session?.status, sessionId, playerUid]);
+  }, [session?.status, sessionId, playerUid, session?.currentQuestionIndex]);
 
   // Trigger local device confetti matching each progressive reveal stage
   useEffect(() => {
@@ -304,17 +311,24 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         return;
       }
 
-      setSession({
-        id: sessionData.id,
-        hostId: sessionData.host_id,
-        code: sessionData.code,
-        status: sessionData.status,
-        quizId: sessionData.quiz_id,
-        quizTitle: sessionData.quiz_title,
-        currentQuestionIndex: sessionData.current_question_index,
-        questionStartTime: sessionData.question_start_time,
-        questionDuration: sessionData.question_duration,
-        totalQuestions: sessionData.total_questions,
+      setSession((prev) => {
+        if (prev) {
+          if (sessionData.status !== "lobby" && sessionData.current_question_index < prev.currentQuestionIndex) {
+            return prev;
+          }
+        }
+        return {
+          id: sessionData.id,
+          hostId: sessionData.host_id,
+          code: sessionData.code,
+          status: sessionData.status,
+          quizId: sessionData.quiz_id,
+          quizTitle: sessionData.quiz_title,
+          currentQuestionIndex: sessionData.current_question_index,
+          questionStartTime: sessionData.question_start_time,
+          questionDuration: sessionData.question_duration,
+          totalQuestions: sessionData.total_questions,
+        };
       });
 
       // 2. Fetch Quiz questions if not cached yet
@@ -384,17 +398,24 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         (payload) => {
           if (payload.new) {
             const sessionData = payload.new as any;
-            setSession({
-              id: sessionData.id,
-              hostId: sessionData.host_id,
-              code: sessionData.code,
-              status: sessionData.status,
-              quizId: sessionData.quiz_id,
-              quizTitle: sessionData.quiz_title,
-              currentQuestionIndex: sessionData.current_question_index,
-              questionStartTime: sessionData.question_start_time,
-              questionDuration: sessionData.question_duration,
-              totalQuestions: sessionData.total_questions,
+            setSession((prev) => {
+              if (prev) {
+                if (sessionData.status !== "lobby" && sessionData.current_question_index < prev.currentQuestionIndex) {
+                  return prev;
+                }
+              }
+              return {
+                id: sessionData.id,
+                hostId: sessionData.host_id,
+                code: sessionData.code,
+                status: sessionData.status,
+                quizId: sessionData.quiz_id,
+                quizTitle: sessionData.quiz_title,
+                currentQuestionIndex: sessionData.current_question_index,
+                questionStartTime: sessionData.question_start_time,
+                questionDuration: sessionData.question_duration,
+                totalQuestions: sessionData.total_questions,
+              };
             });
 
             // Fetch questions if not cached
@@ -450,6 +471,46 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       supabase.removeChannel(realtimeChannel);
     };
   }, [sessionId, playerUid]);
+
+  // Reset hasWatchedIntro if returning to lobby
+  useEffect(() => {
+    if (session?.status === "lobby") {
+      setHasWatchedIntro(false);
+    }
+  }, [session?.status]);
+
+  // Autoplay intro video for players on question 0
+  useEffect(() => {
+    if (session?.status === "countdown" && session?.currentQuestionIndex === 0 && !hasWatchedIntro) {
+      if (introVideoRef.current) {
+        introVideoRef.current.currentTime = 0;
+        const playPromise = introVideoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn("Autoplay audio blocked on player device, muting:", err);
+            if (introVideoRef.current) {
+              introVideoRef.current.muted = true;
+              setIsIntroMuted(true);
+              introVideoRef.current.play().catch(() => {});
+            }
+          });
+        }
+      }
+      // Safety fallback timer so players never get stuck if video fails to load
+      const fallbackTimer = setTimeout(() => {
+        setHasWatchedIntro(true);
+      }, 6500);
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [session?.status, session?.currentQuestionIndex, hasWatchedIntro]);
+
+  const toggleIntroAudio = () => {
+    if (introVideoRef.current) {
+      const nextMuted = !introVideoRef.current.muted;
+      introVideoRef.current.muted = nextMuted;
+      setIsIntroMuted(nextMuted);
+    }
+  };
 
   // Handle countdown resets & manage dynamic countdown values (3, 2, 1, GO!)
   useEffect(() => {
@@ -848,8 +909,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center text-center p-6 font-sans">
         <div className="max-w-md w-full bg-slate-900 border border-red-900/40 p-10 rounded-3xl shadow-2xl relative overflow-hidden">
           <div className="absolute inset-0 bg-red-500/5 blur-3xl rounded-full scale-110" />
-          <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500 rounded-full flex items-center justify-center text-red-500 text-3xl font-black mx-auto mb-6 relative z-10">
-            🚫
+          <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500 rounded-full flex items-center justify-center text-red-500 mx-auto mb-6 relative z-10">
+            <Ban className="w-8 h-8 text-red-500" />
           </div>
           <h2 className="text-3xl font-black font-display text-white mb-3 relative z-10 leading-snug">Je bent verwijderd</h2>
           <p className="text-slate-400 text-sm mb-8 font-sans leading-relaxed relative z-10">
@@ -873,42 +934,42 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
         <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
           {activeTheme.name === "Winter" && (
             <>
-              <div className="absolute top-[10%] left-[15%] text-2xl animate-bounce">❄️</div>
-              <div className="absolute top-[35%] left-[85%] text-xl animate-bounce">❄️</div>
-              <div className="absolute top-[75%] left-[8%] text-3xl animate-bounce">❄️</div>
-              <div className="absolute top-[18%] left-[55%] text-lg animate-bounce">❄️</div>
-              <div className="absolute top-[65%] left-[70%] text-2xl animate-bounce">❄️</div>
+              <div className="absolute top-[10%] left-[15%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
+              <div className="absolute top-[35%] left-[85%] text-indigo-200/40 animate-bounce"><Snowflake className="w-6 h-6" /></div>
+              <div className="absolute top-[75%] left-[8%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
+              <div className="absolute top-[18%] left-[55%] text-indigo-200/40 animate-bounce"><Snowflake className="w-5 h-5" /></div>
+              <div className="absolute top-[65%] left-[70%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
             </>
           )}
           {activeTheme.name === "Zomer" && (
             <>
-              <div className="absolute top-[8%] left-[22%] text-3xl animate-spin duration-10000">☀️</div>
-              <div className="absolute top-[20%] left-[80%] text-3xl animate-pulse">🌴</div>
-              <div className="absolute bottom-[12%] left-[6%] text-2xl">🍹</div>
-              <div className="absolute bottom-[18%] right-[12%] text-3xl animate-bounce">🍦</div>
+              <div className="absolute top-[8%] left-[22%] text-amber-300/40 animate-spin duration-10000"><Sun className="w-9 h-9" /></div>
+              <div className="absolute top-[20%] left-[80%] text-emerald-400/40 animate-pulse"><Palmtree className="w-9 h-9" /></div>
+              <div className="absolute bottom-[12%] left-[6%] text-amber-400/40"><Sun className="w-7 h-7" /></div>
+              <div className="absolute bottom-[18%] right-[12%] text-emerald-300/40 animate-bounce"><Palmtree className="w-9 h-9" /></div>
             </>
           )}
           {activeTheme.name === "Halloween" && (
             <>
-              <div className="absolute top-[12%] left-[12%] text-3xl animate-bounce">👻</div>
-              <div className="absolute top-[45%] left-[82%] text-3xl animate-pulse">🎃</div>
-              <div className="absolute bottom-[18%] left-[40%] text-3xl animate-bounce">🦇</div>
-              <div className="absolute top-[28%] left-[68%] text-2xl">🕸️</div>
+              <div className="absolute top-[12%] left-[12%] text-purple-300/40 animate-bounce"><Ghost className="w-9 h-9" /></div>
+              <div className="absolute top-[45%] left-[82%] text-orange-400/40 animate-pulse"><Ghost className="w-9 h-9" /></div>
+              <div className="absolute bottom-[18%] left-[40%] text-purple-300/40 animate-bounce"><Ghost className="w-9 h-9" /></div>
+              <div className="absolute top-[28%] left-[68%] text-orange-400/30"><Ghost className="w-7 h-7" /></div>
             </>
           )}
           {activeTheme.name === "Kosmisch" && (
             <>
-              <div className="absolute top-[12%] left-[22%] text-lg animate-pulse">⭐</div>
-              <div className="absolute top-[48%] left-[85%] text-xl animate-pulse">✨</div>
-              <div className="absolute bottom-[18%] left-[12%] text-3xl animate-pulse">🪐</div>
-              <div className="absolute top-[68%] left-[58%] text-xl animate-pulse">🌟</div>
+              <div className="absolute top-[12%] left-[22%] text-amber-200/40 animate-pulse"><Sparkles className="w-6 h-6" /></div>
+              <div className="absolute top-[48%] left-[85%] text-indigo-300/40 animate-pulse"><Sparkles className="w-7 h-7" /></div>
+              <div className="absolute bottom-[18%] left-[12%] text-indigo-400/40 animate-pulse"><Sparkles className="w-9 h-9" /></div>
+              <div className="absolute top-[68%] left-[58%] text-amber-300/40 animate-pulse"><Sparkles className="w-6 h-6" /></div>
             </>
           )}
           {activeTheme.name === "Neon Retro" && (
             <>
               <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_95%,rgba(244,63,94,0.15)_95%)] bg-[size:100%_40px] animate-pulse" />
-              <div className="absolute top-[12%] left-[12%] text-2xl animate-pulse">⚡</div>
-              <div className="absolute top-[58%] left-[85%] text-2xl animate-pulse">🕹️</div>
+              <div className="absolute top-[12%] left-[12%] text-pink-400/40 animate-pulse"><Zap className="w-8 h-8" /></div>
+              <div className="absolute top-[58%] left-[85%] text-cyan-400/40 animate-pulse"><Gamepad2 className="w-8 h-8" /></div>
             </>
           )}
         </div>
@@ -964,8 +1025,57 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
             </motion.div>
           )}
 
-          {/* COUNTDOWN PREPARATION TIMERS */}
-          {session?.status === "countdown" && (
+          {/* INTRO VIDEO AT QUIZ START (EENMALIG VOOR SPELERS) */}
+          {(session?.status === "countdown" || (session?.status === "question" && !hasAnswered)) && currentQuestionIdx === 0 && !hasWatchedIntro ? (
+            <motion.div
+              key="intro_video"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col items-center justify-center text-center space-y-4 py-4 px-4 relative z-10 max-w-md mx-auto w-full"
+            >
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-full uppercase tracking-wider animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Quiz Start!
+                </span>
+                <p className="text-slate-400 text-xs font-mono font-bold tracking-wider">
+                  VRAAG 1 VAN DE {session.totalQuestions}
+                </p>
+              </div>
+
+              <div className="w-full relative aspect-video rounded-2xl overflow-hidden bg-black border-2 border-indigo-500/40 shadow-2xl flex items-center justify-center">
+                <video
+                  ref={introVideoRef}
+                  autoPlay
+                  playsInline
+                  onEnded={() => setHasWatchedIntro(true)}
+                  className="w-full h-full object-contain"
+                >
+                  <source src="/uploads/intro_kahotie.mp4" type="video/mp4" />
+                  <source src="/uploads/Intro%20kahotie.mp4" type="video/mp4" />
+                  Jouw browser ondersteunt deze video niet.
+                </video>
+              </div>
+
+              <div className="flex items-center justify-between w-full px-2 text-xs text-slate-300">
+                <button
+                  type="button"
+                  onClick={toggleIntroAudio}
+                  className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-full border border-slate-700 cursor-pointer transition font-medium text-xs shadow-sm"
+                >
+                  {isIntroMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+                  <span>{isIntroMuted ? "Geluid aan" : "Geluid dempen"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHasWatchedIntro(true)}
+                  className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
+                >
+                  Overslaan →
+                </button>
+              </div>
+            </motion.div>
+          ) : session?.status === "countdown" ? (
             <motion.div
               key="countdown"
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1024,10 +1134,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 </AnimatePresence>
               </div>
             </motion.div>
-          )}
+          ) : null}
 
           {/* ACTIVE QUESTION OPTIONS INPUT PANEL */}
-          {session?.status === "question" && activeQuestion && (
+          {session?.status === "question" && activeQuestion && (hasWatchedIntro || currentQuestionIdx > 0) && (
             <motion.div
               key="question"
               initial={{ opacity: 0 }}
@@ -1041,8 +1151,15 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   <span className="text-[10px] text-indigo-300 font-black tracking-widest uppercase">
                     VRAAG {currentQuestionIdx + 1} / {session.totalQuestions}
                   </span>
-                  <div className="bg-white/10 border border-white/15 px-2 py-0.5 rounded-full text-white font-bold font-mono text-[10px] flex items-center gap-1 shrink-0">
-                    <Clock className="w-3 h-3 text-indigo-300 animate-pulse" /> {secondsLeft}s
+                  <div className="flex items-center gap-2">
+                    {self && (
+                      <span className="text-[10px] font-mono font-extrabold text-amber-300 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Trophy className="w-3 h-3 text-amber-400 inline" /> {self.score} pt
+                      </span>
+                    )}
+                    <div className="bg-white/10 border border-white/15 px-2 py-0.5 rounded-full text-white font-bold font-mono text-[10px] flex items-center gap-1 shrink-0">
+                      <Clock className="w-3 h-3 text-indigo-300 animate-pulse" /> {secondsLeft}s
+                    </div>
                   </div>
                 </div>
 
@@ -1082,7 +1199,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 !isAnsweringOpen ? (
                   <div className={`flex-1 flex flex-col items-center justify-center text-center space-y-4 ${activeTheme.cardBg} rounded-3xl p-8 shadow-md relative z-10`}>
                     <div className="w-12 h-12 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin mb-2" />
-                    <h3 className="text-xl font-extrabold font-display text-indigo-300">Maak je klaar! 🎰</h3>
+                    <h3 className="text-xl font-extrabold font-display text-indigo-300 flex items-center justify-center gap-2">
+                      <Dices className="w-6 h-6 text-indigo-300 inline" /> Maak je klaar!
+                    </h3>
                     <p className="text-slate-400 text-xs">
                       Je mag zo meteen aan het Rad van Fortuin draaien...
                     </p>
@@ -1090,8 +1209,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 ) : activeQuestion.questionType === "wheel_spin" ? (
                   <div className={`flex-1 flex flex-col justify-center items-center py-4 px-2 space-y-4 ${activeTheme.cardBg} rounded-3xl p-6 relative z-10 shadow-lg border border-white/5`}>
                     <div className="text-center">
-                      <span className="text-xs font-black tracking-widest text-amber-500 uppercase flex items-center justify-center gap-1">
-                        🎰 Geluksronde - Waag een gokje
+                      <span className="text-xs font-black tracking-widest text-amber-500 uppercase flex items-center justify-center gap-1.5">
+                        <Dices className="w-4 h-4 text-amber-500 inline" /> Geluksronde - Waag een gokje
                       </span>
                       <p className="text-slate-400 text-xs mt-1 max-w-xs leading-relaxed">
                         Klik op de spin knop om te zien hoeveel bonuspunten jij verdient of verliest!
@@ -1116,7 +1235,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 ) : activeQuestion.questionType === "puzzle" ? (
                   <div className="flex-1 flex flex-col gap-4 pb-4 select-none">
                     <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-2xl text-center">
-                      <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">🧩 Sleep de kaarten in de juiste volgorde!</p>
+                      <p className="text-xs text-purple-300 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5">
+                        <ListOrdered className="w-4 h-4 text-purple-300 inline" /> Sleep de kaarten in de juiste volgorde!
+                      </p>
                       <p className="text-[10px] text-slate-400 mt-0.5">Bovenste is #1, of gebruik de pijltjes.</p>
                     </div>
 
@@ -1196,16 +1317,17 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                         }
                         await submitAnswerToSupabase(val);
                       }}
-                      className="w-full mt-2 bg-purple-650 hover:bg-purple-550 text-white font-display font-black py-4 rounded-2xl border-b-6 border-purple-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
+                      className="w-full mt-2 bg-purple-650 hover:bg-purple-550 text-white font-display font-black py-4 rounded-2xl border-b-6 border-purple-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer flex items-center justify-center gap-2"
                     >
-                      Volgorde Bevestigen 🚀
+                      <span>Volgorde Bevestigen</span>
+                      <Check className="w-5 h-5" />
                     </button>
                   </div>
                 ) : activeQuestion.questionType === "slider" ? (
                   <div className="flex-1 flex flex-col gap-6 py-4 px-2 space-y-4 select-none">
                     <div className="text-center">
-                      <span className="text-sm font-black tracking-widest text-teal-400 uppercase flex items-center justify-center gap-1">
-                        🎚️ Schuif of typ het juiste getal
+                      <span className="text-sm font-black tracking-widest text-teal-400 uppercase flex items-center justify-center gap-1.5">
+                        <Sliders className="w-4 h-4 text-teal-400 inline" /> Schuif of typ het juiste getal
                       </span>
                       <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                         Gebruik de schuifbalk om een waarde van {(activeQuestion.sliderMin ?? 1).toLocaleString("nl-NL")} tot {(activeQuestion.sliderMax ?? (activeQuestion.options?.length ?? 5)).toLocaleString("nl-NL")} te kiezen!
@@ -1311,9 +1433,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                         const isCustom = activeQuestion.sliderMin !== undefined || activeQuestion.sliderMax !== undefined;
                         await submitAnswerToSupabase(isCustom ? sliderVal : sliderVal - 1);
                       }}
-                      className="w-full bg-teal-600 hover:bg-teal-500 text-white font-display font-black py-4 rounded-2xl border-b-6 border-teal-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer"
+                      className="w-full bg-teal-600 hover:bg-teal-500 text-white font-display font-black py-4 rounded-2xl border-b-6 border-teal-800 shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all uppercase tracking-widest text-base cursor-pointer flex items-center justify-center gap-2"
                     >
-                      Bevestig Getal ({parseFloat(Number(sliderVal).toFixed(4)).toLocaleString("nl-NL")}) ⭐
+                      <span>Bevestig Getal ({parseFloat(Number(sliderVal).toFixed(4)).toLocaleString("nl-NL")})</span>
+                      <Check className="w-5 h-5" />
                     </button>
                   </div>
                 ) : (
@@ -1321,7 +1444,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                     {/* Instructions banner */}
                     {activeQuestion.correctOptionIndices && activeQuestion.correctOptionIndices.length > 1 && (
                       <div className="bg-indigo-50 dark:bg-indigo-950/20 text-indigo-800 dark:text-indigo-200 p-3 rounded-xl border border-indigo-100 dark:border-indigo-950/40 text-xs font-bold flex items-center gap-2">
-                        <span className="animate-pulse">💡</span>
+                        <Lightbulb className="w-4 h-4 text-indigo-400 animate-pulse shrink-0" />
                         <span>MULTI-SELECT: Vink alle juiste opties aan en druk op de grote knop onderaan!</span>
                       </div>
                     )}
@@ -1376,7 +1499,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 /* ANTI-CHEAT BLOCKED STATE - CLEAN & SOBRE */
                 <div className={`${activeTheme.cardBg} flex-1 flex flex-col items-center justify-center text-center space-y-4 rounded-3xl p-8 shadow-md border border-white/5`}>
                   <div className="w-16 h-16 bg-white/10 text-white rounded-full border border-white/20 flex items-center justify-center text-2xl shadow-md">
-                    🔒
+                    <Lock className="w-7 h-7 text-white" />
                   </div>
                   <h3 className={`text-2xl font-display ${textTitleClass}`}>
                     {lang === "nl" ? "Antwoord vergrendeld" : "Answer locked"}
@@ -1423,7 +1546,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                     <Sparkles className="w-10 h-10 text-yellow-300" />
                   </div>
                   <div className="space-y-1">
-                    <h2 className="text-2xl sm:text-3xl font-black font-display uppercase tracking-wider">Gok Resultaat! 🎰</h2>
+                    <h2 className="text-2xl sm:text-3xl font-black font-display uppercase tracking-wider flex items-center justify-center gap-2">
+                      <Sparkles className="w-6 h-6 text-yellow-300 inline" /> Gok Resultaat!
+                    </h2>
                     <p className="text-amber-100 font-semibold text-sm">
                       Jij landde op: <span className="underline font-black">{self.currentAnswerIndex !== null && self.currentAnswerIndex !== undefined && self.currentAnswerIndex >= 0 ? activeQuestion.options[self.currentAnswerIndex] : "Geen gok gedaan"}</span>
                     </p>
@@ -1461,8 +1586,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   </div>
 
                   {self.streak > 1 && (
-                    <div className="bg-orange-600/90 py-2 border border-orange-500 rounded-full inline-block px-4 text-xs font-black uppercase text-white animate-pulse">
-                      🔥 {self.streak} Vragen Streak!
+                    <div className="bg-orange-600/90 py-2 border border-orange-500 rounded-full inline-flex items-center gap-1.5 px-4 text-xs font-black uppercase text-white animate-pulse">
+                      <Flame className="w-4 h-4 text-amber-200 inline" /> {self.streak} Vragen Streak!
                     </div>
                   )}
                 </div>
@@ -1494,7 +1619,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               {/* Candidate current points indicators */}
               <div className="mt-4 bg-slate-900 text-white p-4.5 rounded-3xl border-b-4 border-slate-950 flex justify-between items-center shadow-lg w-full max-w-sm mx-auto">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">🏆</span>
+                  <Trophy className="w-5 h-5 text-amber-400" />
                   <span className="text-xs text-slate-300 font-extrabold uppercase tracking-widest">
                     Jouw Totaalscore
                   </span>
@@ -1532,7 +1657,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               </div>
 
               <div className="flex items-center gap-2 bg-indigo-500/25 text-indigo-300 px-4 py-2 text-sm rounded-full border border-indigo-400/40 font-bold justify-center font-mono animate-pulse">
-                Huidige streak: {self.streak} 🔥
+                <Flame className="w-4 h-4 text-orange-400 inline" />
+                <span>Huidige streak: {self.streak}</span>
               </div>
             </motion.div>
           )}
@@ -1552,36 +1678,85 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               else if (playerRank > 5 && revealStage >= 5) isMyRankRevealed = true;
             }
 
-            // If my rank is NOT yet revealed, show the Live Reveal Arena!
-            if (!isMyRankRevealed) {
+            // 1. WHILE REVEAL IS IN PROGRESS (< 5): Keep all players in Live Reveal Arena so they can watch places 5, 4, 3, 2, 1 unfold!
+            if (revealStage < 5) {
               return (
                 <motion.div
                   key="ended-live-reveal-arena"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex-1 flex flex-col space-y-6 max-w-md mx-auto py-6 px-4"
+                  className="flex-1 flex flex-col space-y-4 max-w-md mx-auto py-4 px-3"
                 >
-                  <div className="text-center space-y-2">
-                    <span className="bg-indigo-500/10 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
+                  <div className="text-center space-y-1.5">
+                    <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-500/20 animate-pulse">
                       Live Finale Onthulling
                     </span>
-                    <h1 className={`text-3xl font-display ${textTitleClass} leading-tight`}>
-                      Op welke plaats sta jij?
+                    <h1 className={`text-2xl font-display ${textTitleClass} leading-tight`}>
+                      {isMyRankRevealed ? "Live Podium Ontknoping!" : "Op welke plaats sta jij?"}
                     </h1>
-                    <p className={`text-sm ${textMutedClass}`}>
-                      De host is nu live de eindstand aan het onthullen! Kijk mee hoe de slots openen... 🤫
+                    <p className={`text-xs ${textMutedClass}`}>
+                      De host onthult nu live de plaatsen van 5 naar 1!
                     </p>
                   </div>
 
+                  {/* Personal celebration callout if your rank has been revealed */}
+                  {isMyRankRevealed && playerRank !== null && (
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={`p-3.5 rounded-2xl border flex items-center gap-3 shadow-md ${
+                        playerRank === 3
+                          ? "bg-amber-500/15 border-amber-500/40 text-amber-200"
+                          : playerRank === 2
+                          ? "bg-slate-300/15 border-slate-300/40 text-slate-200"
+                          : playerRank === 1
+                          ? "bg-amber-400/20 border-amber-400/50 text-amber-300"
+                          : "bg-indigo-500/15 border-indigo-500/40 text-indigo-200"
+                      }`}
+                    >
+                      {playerRank === 1 ? (
+                        <Trophy className="w-8 h-8 text-amber-400 shrink-0 animate-bounce" />
+                      ) : playerRank === 2 ? (
+                        <Medal className="w-8 h-8 text-slate-300 shrink-0" />
+                      ) : playerRank === 3 ? (
+                        <Medal className="w-8 h-8 text-amber-500 shrink-0" />
+                      ) : (
+                        <Award className="w-8 h-8 text-indigo-400 shrink-0" />
+                      )}
+                      <div className="text-left min-w-0">
+                        <p className="font-extrabold text-white text-sm truncate">
+                          {playerRank === 3
+                            ? `Gefeliciteerd ${displayName}! Je staat op Brons!`
+                            : playerRank === 2
+                            ? `Geweldig ${displayName}! Je staat op Zilver!`
+                            : playerRank === 1
+                            ? `Fantastisch ${displayName}! Je bent de Winnaar!`
+                            : `Goed gedaan ${displayName}! Je bent ${playerRank}e finalist!`}
+                        </p>
+                        <p className="text-[11px] opacity-90">
+                          {playerRank === 3
+                            ? "Kijk nu live mee naar wie er op plek 2 en 1 eindigen..."
+                            : playerRank === 2
+                            ? "Kijk nu live mee naar wie de 1e plaats pakt..."
+                            : "Blijf kijken hoe de rest van het podium opengaat..."}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Real-time progression stats for the 5 spots */}
-                  <div className="space-y-3 bg-slate-900/40 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/10 shadow-lg backdrop-blur-xs">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-left px-1">
-                      Finale Standen
-                    </p>
+                  <div className="space-y-2.5 bg-slate-900/40 dark:bg-slate-950/40 p-3.5 rounded-2xl border border-slate-200/10 shadow-lg backdrop-blur-xs">
+                    <div className="flex items-center justify-between px-1">
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest text-left">
+                        Finale Standen
+                      </p>
+                      <span className="text-[10px] text-indigo-400 font-mono font-bold">
+                        Stap {revealStage} van 5
+                      </span>
+                    </div>
                     
                     {[1, 2, 3, 4, 5].map((place) => {
-                      // Determine if this place is currently revealed
                       let isPlaceRevealed = false;
                       if (place === 5 && revealStage >= 1) isPlaceRevealed = true;
                       if (place === 4 && revealStage >= 2) isPlaceRevealed = true;
@@ -1599,37 +1774,53 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                             key={`place-${place}`}
                             initial={{ x: -20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
-                            className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
                               isYou
-                                ? "bg-indigo-600/30 border-indigo-500 shadow-md"
+                                ? "bg-indigo-600/30 border-indigo-500 shadow-md ring-2 ring-indigo-400/40"
+                                : place === 1
+                                ? "bg-amber-500/10 border-amber-500/30"
+                                : place === 2
+                                ? "bg-slate-300/10 border-slate-400/30"
+                                : place === 3
+                                ? "bg-amber-600/10 border-amber-600/30"
                                 : "bg-slate-900/60 border-slate-800"
                             }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="relative">
-                                <img src={pAvatar} alt="avatar" className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700" />
-                                <span className="absolute -top-1 -left-1 bg-indigo-600 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white text-white">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative shrink-0">
+                                <img src={pAvatar} alt="avatar" className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700" />
+                                <span className={`absolute -top-1 -left-1 text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border text-white ${
+                                  place === 1 ? "bg-amber-500 border-amber-300" : place === 2 ? "bg-slate-400 border-slate-200 text-slate-900" : place === 3 ? "bg-amber-700 border-amber-500" : "bg-indigo-600 border-white"
+                                }`}>
                                   {place}
                                 </span>
                               </div>
                               <div className="min-w-0 text-left">
-                                <p className="font-bold text-slate-300 text-sm truncate flex items-center gap-1.5">
-                                  <span className="text-white">{pName.replace(/[:|~]/g, "")}</span>
+                                <p className="font-bold text-slate-300 text-xs truncate flex items-center gap-1.5">
+                                  <span className="text-white truncate">{pName.replace(/[:|~]/g, "")}</span>
                                   {isPVerified && (
-                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
+                                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3 h-3 text-[7px] font-black shrink-0 shadow-sm">
                                       ✓
                                     </span>
                                   )}
                                   {isYou && (
-                                    <span className="bg-indigo-500 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded-sm">Jij!</span>
+                                    <span className="bg-indigo-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-sm shrink-0">Jij!</span>
                                   )}
                                 </p>
-                                <p className="text-[10px] text-slate-400">
-                                  {place === 1 ? "🏆 Winnaar" : place <= 3 ? "🥈 Podium" : "🎖️ Finalist"}
+                                <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                  {place === 1 ? (
+                                    <><Trophy className="w-3 h-3 text-amber-400 inline" /> Winnaar (Goud)</>
+                                  ) : place === 2 ? (
+                                    <><Medal className="w-3 h-3 text-slate-300 inline" /> 2e Plaats (Zilver)</>
+                                  ) : place === 3 ? (
+                                    <><Medal className="w-3 h-3 text-amber-500 inline" /> 3e Plaats (Brons)</>
+                                  ) : (
+                                    <><Award className="w-3 h-3 text-indigo-400 inline" /> Finalist</>
+                                  )}
                                 </p>
                               </div>
                             </div>
-                            <span className="font-mono text-xs font-extrabold text-indigo-400">
+                            <span className="font-mono text-xs font-extrabold text-indigo-400 shrink-0">
                               {playerAtPlace.score} pt
                             </span>
                           </motion.div>
@@ -1638,15 +1829,17 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                         return (
                           <div
                             key={`place-${place}`}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-950/20 border border-slate-800/40 opacity-50"
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/20 border border-slate-800/40 opacity-60"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center text-slate-600 text-xs">
-                                🔒
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-slate-600 text-xs shrink-0">
+                                <Lock className="w-3.5 h-3.5 text-slate-600" />
                               </div>
                               <div className="text-left">
-                                <p className="text-sm font-bold text-slate-500">???</p>
-                                <p className="text-[10px] text-slate-600">Nog niet onthuld</p>
+                                <p className="text-xs font-bold text-slate-500">
+                                  {place === 1 ? "1e Plaats (Goud)" : place === 2 ? "2e Plaats (Zilver)" : place === 3 ? "3e Plaats (Brons)" : `${place}e Plaats`}
+                                </p>
+                                <p className="text-[10px] text-slate-600">Wordt zo onthuld...</p>
                               </div>
                             </div>
                             <span className="font-mono text-xs font-bold text-slate-700">??? pt</span>
@@ -1656,193 +1849,419 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                     })}
                   </div>
 
-                  <div className="bg-slate-900/80 dark:bg-slate-950/80 text-slate-400 rounded-2xl p-4 flex items-center justify-center gap-3 border border-slate-800">
+                  <div className="bg-slate-900/80 dark:bg-slate-950/80 text-slate-400 rounded-2xl p-3.5 flex items-center justify-center gap-3 border border-slate-800">
                     <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-                    <span className="font-bold text-xs uppercase tracking-widest font-mono text-white">Lobby Onthulling Live...</span>
+                    <span className="font-bold text-xs uppercase tracking-widest font-mono text-white">
+                      Host onthult live...
+                    </span>
                   </div>
                 </motion.div>
               );
             }
 
-            // 3. YOUR RANK IS REVEALED! SHOW INDIVIDUAL CONGRATULATIONS WITH AWESOME VISUALS!
-            if (playerRank === 1) {
-              return (
-                <motion.div
-                  key="ended-winner"
-                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
-                >
-                  <div className="w-32 h-32 bg-amber-500/20 border-4 border-amber-400 rounded-full flex items-center justify-center text-amber-400 shadow-2xl relative">
-                    <Trophy className="w-16 h-16 animate-bounce text-amber-400" />
-                    <div className="absolute -top-2 -right-2 bg-indigo-600 text-white rounded-full p-1.5 animate-pulse">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
-                      🏆 EERSTE PLAATS - CHAMPION! 🏆
-                    </p>
-                    <h1 className={`text-4xl font-display ${textTitleClass} leading-tight`}>
-                      EINDWINNAAR!
-                    </h1>
-                    <p className={`font-medium text-sm ${textMutedClass}`}>
-                      Gefeliciteerd {displayName}! Je bent de absolute winnaar geworden met een schitterende score van {self.score} pt!
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={onExit}
-                    className="w-full bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4 animate-pulse"
-                  >
-                    Klaar en Sluiten 🎉
-                  </button>
-                </motion.div>
-              );
-            }
+            // 2. GRAND FINALE: ALL REVEAL STAGES COMPLETE (revealStage >= 5)
+            // Displays both the individual achievement card AND the complete Top 3 podium so everyone (including 3rd place) clearly sees 1st and 2nd place!
+            const firstPlace = allPlayersSorted[0];
+            const secondPlace = allPlayersSorted[1];
+            const thirdPlace = allPlayersSorted[2];
+            const fourthPlace = allPlayersSorted[3];
+            const fifthPlace = allPlayersSorted[4];
 
-            if (playerRank === 2) {
-              return (
-                <motion.div
-                  key="ended-silver"
-                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
-                >
-                  <div className="w-28 h-28 bg-slate-100/10 border-4 border-slate-300 rounded-full flex items-center justify-center text-slate-300 shadow-2xl relative animate-bounce animate-duration-1000">
-                    <Award className="w-14 h-14 text-slate-300" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-slate-300 text-xs font-black uppercase tracking-widest font-mono">
-                      🥈 TWEEDE PLAATS - SILVER! 🥈
-                    </p>
-                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
-                      Fantastisch!
-                    </h1>
-                    <p className={`font-medium text-sm ${textMutedClass}`}>
-                      Gefeliciteerd {displayName}! Je hebt een waanzinnige 2e plaats bemachtigd op het podium met {self.score} pt!
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={onExit}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
-                  >
-                    Klaar en Sluiten 🎉
-                  </button>
-                </motion.div>
-              );
-            }
-
-            if (playerRank === 3) {
-              return (
-                <motion.div
-                  key="ended-bronze"
-                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
-                >
-                  <div className="w-28 h-28 bg-amber-950/20 border-4 border-amber-600 rounded-full flex items-center justify-center text-amber-500 shadow-2xl relative animate-bounce animate-duration-1000">
-                    <Award className="w-14 h-14 text-amber-500" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-amber-500 text-xs font-black uppercase tracking-widest font-mono">
-                      🥉 DERDE PLAATS - BRONZE! 🥉
-                    </p>
-                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
-                      Super gedaan!
-                    </h1>
-                    <p className={`font-medium text-sm ${textMutedClass}`}>
-                      Mooi werk {displayName}! Je eindigt op een eervolle 3e plaats en claimt brons met {self.score} pt!
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={onExit}
-                    className="w-full bg-indigo-655 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
-                  >
-                    Klaar en Sluiten 🎉
-                  </button>
-                </motion.div>
-              );
-            }
-
-            if (playerRank === 4 || playerRank === 5) {
-              return (
-                <motion.div
-                  key="ended-finalist"
-                  initial={{ scale: 0.8, opacity: 0, y: 50 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
-                >
-                  <div className="w-28 h-28 bg-indigo-950/40 border-4 border-indigo-400 rounded-full flex items-center justify-center text-indigo-400 shadow-2xl relative animate-bounce animate-duration-1200">
-                    <Award className="w-14 h-14 text-indigo-400" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-indigo-400 text-xs font-black uppercase tracking-widest font-mono">
-                      🎖️ GEFELICITEERD - FINALIST! 🎖️
-                    </p>
-                    <h1 className={`text-3.5xl font-display ${textTitleClass} leading-tight`}>
-                      {playerRank}e Plaats!
-                    </h1>
-                    <p className={`font-medium text-sm ${textMutedClass}`}>
-                      Wauw {displayName}! Je bent geëindigd als een van de officiële top finalisten (de {playerRank}e plaats!) met een score van {self.score} pt! Wat een prestatie!
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={onExit}
-                    className="w-full bg-indigo-655 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase mt-4"
-                  >
-                    Klaar en Sluiten 🎉
-                  </button>
-                </motion.div>
-              );
-            }
-
-            // For ranks 6 and below
             return (
               <motion.div
-                key="ended-finished-others"
+                key="ended-grand-finale"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-sm mx-auto py-10"
+                className="flex-1 flex flex-col space-y-4 max-w-md mx-auto py-4 px-3"
               >
-                <div className="w-24 h-24 bg-teal-950/25 border-2 border-teal-500 rounded-full flex items-center justify-center text-teal-400 shadow-md">
-                  <Award className="w-12 h-12" />
-                </div>
-
-                <div className="space-y-2">
-                  <h1 className={`text-3xl font-display ${textTitleClass}`}>Einde van de Quiz!</h1>
-                  <p className={`text-sm ${textMutedClass}`}>
-                    Gefeliciteerd met het volbrengen van alle vragen! Jouw score en positie zijn hieronder zichtbaar.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 w-full">
-                  {playerRank !== null && (
-                    <div className="bg-linear-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-5 w-full space-y-1 border-b-4 border-emerald-700 shadow-md font-display">
-                      <p className="text-xs text-emerald-100 font-bold uppercase tracking-widest">Jouw Eindpositie</p>
-                      <h2 className="text-3.5xl font-black font-mono">
-                        {playerRank}e <span className="text-lg font-sans font-medium">plaats</span>
-                      </h2>
-                      <p className="text-xs text-emerald-100/80 font-sans">
-                        van de {allPlayersSorted.length} Deelnemers
-                      </p>
+                {/* Personal Achievement Header Banner */}
+                {playerRank === 1 && (
+                  <div className="bg-linear-to-r from-amber-500/20 via-amber-500/10 to-amber-600/20 border-2 border-amber-400/60 rounded-2xl p-4 text-center space-y-2 shadow-lg">
+                    <div className="flex items-center justify-center gap-2">
+                      <Trophy className="w-6 h-6 text-amber-400 animate-bounce" />
+                      <span className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
+                        EERSTE PLAATS - EINDWINNAAR!
+                      </span>
+                      <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
                     </div>
-                  )}
+                    <h1 className={`text-2xl font-display ${textTitleClass} leading-tight`}>
+                      Gefeliciteerd {displayName}!
+                    </h1>
+                    <p className={`text-xs ${textMutedClass}`}>
+                      Je bent de absolute winnaar van de quiz met een topscore van <strong className="text-amber-400 font-mono">{self.score} pt</strong>!
+                    </p>
+                  </div>
+                )}
 
-                  <div className="bg-slate-900 dark:bg-slate-950 text-white rounded-2xl p-5 w-full space-y-1 border-b-4 border-slate-950 border border-slate-800 shadow-sm font-display">
-                    <p className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Mijn Eindscore</p>
-                    <h2 className="text-3xl font-black font-mono text-white">{self.score} pt</h2>
+                {playerRank === 2 && (
+                  <div className="bg-linear-to-r from-slate-300/20 via-slate-400/10 to-slate-300/20 border-2 border-slate-300/60 rounded-2xl p-4 text-center space-y-2 shadow-lg">
+                    <div className="flex items-center justify-center gap-2">
+                      <Medal className="w-6 h-6 text-slate-300" />
+                      <span className="text-slate-300 text-xs font-black uppercase tracking-widest font-mono">
+                        TWEEDE PLAATS - ZILVER!
+                      </span>
+                    </div>
+                    <h1 className={`text-2xl font-display ${textTitleClass} leading-tight`}>
+                      Super gepresteerd {displayName}!
+                    </h1>
+                    <p className={`text-xs ${textMutedClass}`}>
+                      Je pakt een fantastische 2e plaats op het podium met <strong className="text-slate-300 font-mono">{self.score} pt</strong>!
+                    </p>
+                  </div>
+                )}
+
+                {playerRank === 3 && (
+                  <div className="bg-linear-to-r from-amber-600/20 via-amber-700/10 to-amber-600/20 border-2 border-amber-600/60 rounded-2xl p-4 text-center space-y-2 shadow-lg">
+                    <div className="flex items-center justify-center gap-2">
+                      <Medal className="w-6 h-6 text-amber-500" />
+                      <span className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
+                        DERDE PLAATS - BRONS!
+                      </span>
+                    </div>
+                    <h1 className={`text-2xl font-display ${textTitleClass} leading-tight`}>
+                      Mooi gedaan {displayName}!
+                    </h1>
+                    <p className={`text-xs ${textMutedClass}`}>
+                      Je eindigt op een eervolle 3e plaats en claimt brons met <strong className="text-amber-400 font-mono">{self.score} pt</strong>!
+                    </p>
+                  </div>
+                )}
+
+                {playerRank !== null && playerRank > 3 && (
+                  <div className="bg-slate-900/60 dark:bg-slate-950/60 border border-indigo-500/30 rounded-2xl p-4 text-center space-y-2 shadow-lg">
+                    <div className="flex items-center justify-center gap-2">
+                      <Award className="w-5 h-5 text-indigo-400" />
+                      <span className="text-indigo-400 text-xs font-black uppercase tracking-widest font-mono">
+                        {playerRank <= 5 ? "TOP FINALIST!" : "QUIZ VOLBRACHT!"}
+                      </span>
+                    </div>
+                    <h1 className={`text-2xl font-display ${textTitleClass} leading-tight`}>
+                      {playerRank}e Plaats
+                    </h1>
+                    <p className={`text-xs ${textMutedClass}`}>
+                      Goed gespeeld {displayName}! Je behaalt de {playerRank}e plaats van de {allPlayersSorted.length} deelnemers met <strong className="text-indigo-400 font-mono">{self.score} pt</strong>.
+                    </p>
+                  </div>
+                )}
+
+                {/* Tab Navigation for Player */}
+                <div className="flex justify-center gap-2 max-w-xs mx-auto w-full">
+                  <button
+                    onClick={() => setPlayerEndTab("podium")}
+                    className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      playerEndTab === "podium"
+                        ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" /> Podium
+                  </button>
+                  <button
+                    onClick={() => setPlayerEndTab("ranking")}
+                    className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      playerEndTab === "ranking"
+                        ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
+                    }`}
+                  >
+                    <ListOrdered className="w-3.5 h-3.5 text-indigo-400" /> Ranglijst ({allPlayersSorted.length})
+                  </button>
+                </div>
+
+                {playerEndTab === "podium" ? (
+                  <>
+                    {/* THE COMPLETE PODIUM (TOP 3) - ALWAYS VISIBLE TO ALL PLAYERS */}
+                <div className="bg-slate-900/50 dark:bg-slate-950/50 p-4 rounded-2xl border border-slate-200/10 shadow-lg backdrop-blur-xs">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+                      <Trophy className="w-4 h-4 text-amber-400" /> Het Officiële Podium
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono font-bold">Top 3</span>
+                  </div>
+
+                  <div className="flex items-end justify-center gap-2 pt-2 pb-1">
+                    {/* 2nd Place Column (Left) */}
+                    <div className="flex-1 flex flex-col items-center">
+                      {secondPlace ? (() => {
+                        const { displayName: sName, avatarUrl: sAvatar, isVerified: sVer } = parseNicknameAndAvatar(secondPlace.nickname || "");
+                        const isYou = playerRank === 2;
+                        return (
+                          <>
+                            <div className="relative mb-2 flex flex-col items-center">
+                              <img src={sAvatar} alt="2nd" className={`w-11 h-11 rounded-full bg-slate-800 border-2 ${isYou ? "border-indigo-400 ring-2 ring-indigo-400" : "border-slate-300"}`} />
+                              <span className="absolute -top-1.5 -left-1.5 bg-slate-400 text-slate-950 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                                2
+                              </span>
+                              {isYou && (
+                                <span className="mt-1 bg-indigo-500 text-white text-[8px] font-black uppercase px-1.5 py-0.2 rounded-sm">Jij!</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-bold text-slate-200 truncate w-20 text-center flex items-center justify-center gap-1">
+                              <span className="truncate">{sName.replace(/[:|~]/g, "")}</span>
+                              {sVer && <span className="text-blue-400 text-[8px]">✓</span>}
+                            </p>
+                            <span className="text-[10px] font-mono font-extrabold text-slate-300 mb-1.5">{secondPlace.score} pt</span>
+                            <div className="w-full h-24 rounded-t-xl bg-linear-to-b from-slate-400 to-slate-600 border-t-2 border-slate-200 flex flex-col items-center justify-center text-slate-950 shadow-md">
+                              <span className="font-mono text-2xl font-black">2</span>
+                              <span className="text-[9px] font-black uppercase tracking-wider">Zilver</span>
+                            </div>
+                          </>
+                        );
+                      })() : (
+                        <div className="w-full h-24 rounded-t-xl bg-slate-800/40 border-t-2 border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                          -
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 1st Place Column (Center, Taller) */}
+                    <div className="flex-1 flex flex-col items-center">
+                      {firstPlace ? (() => {
+                        const { displayName: fName, avatarUrl: fAvatar, isVerified: fVer } = parseNicknameAndAvatar(firstPlace.nickname || "");
+                        const isYou = playerRank === 1;
+                        return (
+                          <>
+                            <Crown className="w-5 h-5 text-amber-400 mb-0.5 animate-bounce" />
+                            <div className="relative mb-2 flex flex-col items-center">
+                              <img src={fAvatar} alt="1st" className={`w-13 h-13 rounded-full bg-slate-800 border-2 ${isYou ? "border-indigo-400 ring-2 ring-indigo-400" : "border-amber-400"}`} />
+                              <span className="absolute -top-1.5 -left-1.5 bg-amber-400 text-slate-950 font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                                1
+                              </span>
+                              {isYou && (
+                                <span className="mt-1 bg-indigo-500 text-white text-[8px] font-black uppercase px-1.5 py-0.2 rounded-sm">Jij!</span>
+                              )}
+                            </div>
+                            <p className="text-xs font-extrabold text-amber-300 truncate w-22 text-center flex items-center justify-center gap-1">
+                              <span className="truncate">{fName.replace(/[:|~]/g, "")}</span>
+                              {fVer && <span className="text-blue-400 text-[8px]">✓</span>}
+                            </p>
+                            <span className="text-[10px] font-mono font-extrabold text-amber-400 mb-1.5">{firstPlace.score} pt</span>
+                            <div className="w-full h-32 rounded-t-xl bg-linear-to-b from-amber-400 to-amber-600 border-t-2 border-amber-200 flex flex-col items-center justify-center text-slate-950 shadow-lg">
+                              <span className="font-mono text-3xl font-black">1</span>
+                              <span className="text-[9px] font-black uppercase tracking-wider">Winnaar</span>
+                            </div>
+                          </>
+                        );
+                      })() : (
+                        <div className="w-full h-32 rounded-t-xl bg-slate-800/40 border-t-2 border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                          -
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3rd Place Column (Right) */}
+                    <div className="flex-1 flex flex-col items-center">
+                      {thirdPlace ? (() => {
+                        const { displayName: tName, avatarUrl: tAvatar, isVerified: tVer } = parseNicknameAndAvatar(thirdPlace.nickname || "");
+                        const isYou = playerRank === 3;
+                        return (
+                          <>
+                            <div className="relative mb-2 flex flex-col items-center">
+                              <img src={tAvatar} alt="3rd" className={`w-10 h-10 rounded-full bg-slate-800 border-2 ${isYou ? "border-indigo-400 ring-2 ring-indigo-400" : "border-amber-600"}`} />
+                              <span className="absolute -top-1.5 -left-1.5 bg-amber-700 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                                3
+                              </span>
+                              {isYou && (
+                                <span className="mt-1 bg-indigo-500 text-white text-[8px] font-black uppercase px-1.5 py-0.2 rounded-sm">Jij!</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-bold text-slate-300 truncate w-20 text-center flex items-center justify-center gap-1">
+                              <span className="truncate">{tName.replace(/[:|~]/g, "")}</span>
+                              {tVer && <span className="text-blue-400 text-[8px]">✓</span>}
+                            </p>
+                            <span className="text-[10px] font-mono font-extrabold text-amber-500 mb-1.5">{thirdPlace.score} pt</span>
+                            <div className="w-full h-20 rounded-t-xl bg-linear-to-b from-amber-600 to-amber-800 border-t-2 border-amber-400 flex flex-col items-center justify-center text-white shadow-md">
+                              <span className="font-mono text-xl font-black">3</span>
+                              <span className="text-[8px] font-black uppercase tracking-wider">Brons</span>
+                            </div>
+                          </>
+                        );
+                      })() : (
+                        <div className="w-full h-20 rounded-t-xl bg-slate-800/40 border-t-2 border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                          -
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
+                {/* Finalists Row (4th & 5th) */}
+                {(fourthPlace || fifthPlace) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {fourthPlace && (() => {
+                      const { displayName: foName, avatarUrl: foAvatar } = parseNicknameAndAvatar(fourthPlace.nickname || "");
+                      const isYou = playerRank === 4;
+                      return (
+                        <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                          isYou ? "bg-indigo-600/30 border-indigo-500" : "bg-slate-900/50 border-slate-800"
+                        }`}>
+                          <img src={foAvatar} alt="4th" className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700" />
+                          <div className="min-w-0 text-left">
+                            <p className="text-[11px] font-bold text-slate-300 truncate">
+                              4. {foName.replace(/[:|~]/g, "")} {isYou && <span className="text-indigo-400">(Jij)</span>}
+                            </p>
+                            <p className="text-[9px] font-mono text-indigo-400 font-bold">{fourthPlace.score} pt</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {fifthPlace && (() => {
+                      const { displayName: fiName, avatarUrl: fiAvatar } = parseNicknameAndAvatar(fifthPlace.nickname || "");
+                      const isYou = playerRank === 5;
+                      return (
+                        <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                          isYou ? "bg-indigo-600/30 border-indigo-500" : "bg-slate-900/50 border-slate-800"
+                        }`}>
+                          <img src={fiAvatar} alt="5th" className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700" />
+                          <div className="min-w-0 text-left">
+                            <p className="text-[11px] font-bold text-slate-300 truncate">
+                              5. {fiName.replace(/[:|~]/g, "")} {isYou && <span className="text-indigo-400">(Jij)</span>}
+                            </p>
+                            <p className="text-[9px] font-mono text-indigo-400 font-bold">{fifthPlace.score} pt</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Bedankt voor het meespelen Slotvideo */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-slate-900/70 dark:bg-slate-950/70 p-4 rounded-2xl border border-indigo-500/30 shadow-xl overflow-hidden space-y-2.5"
+                >
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Bedankt voor het meespelen!
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">Slotboodschap</span>
+                  </div>
+                  <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 flex items-center justify-center shadow-inner">
+                    <video
+                      src="/uploads/IMG_6220.MP4"
+                      controls
+                      playsInline
+                      autoPlay
+                      className="w-full h-full object-contain"
+                    >
+                      <source src="/uploads/IMG_6220.MP4" type="video/mp4" />
+                      <source src="/uploads/IMG_6220.mp4" type="video/mp4" />
+                      Jouw browser ondersteunt deze video niet.
+                    </video>
+                  </div>
+                  <p className="text-[11px] text-slate-400 text-center font-medium">
+                    Bedankt voor het spelen van de quiz!
+                  </p>
+                </motion.div>
+              </>
+            ) : (
+              /* FULL RANKING OVERVIEW FOR PLAYER */
+              <div className="bg-slate-900/70 dark:bg-slate-950/70 p-4 rounded-2xl border border-slate-800 shadow-xl space-y-3">
+                <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <ListOrdered className="w-4 h-4 text-indigo-400" /> Alle Deelnemers
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Overzicht van de volledige eindstand</p>
+                  </div>
+                  <span className="text-[10px] font-mono bg-indigo-950/60 text-indigo-300 px-2.5 py-1 rounded-full border border-indigo-800 font-bold">
+                    {allPlayersSorted.length} Spelers
+                  </span>
+                </div>
+
+                {/* Search box if there are more than 5 players */}
+                {allPlayersSorted.length > 5 && (
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Zoek een speler..."
+                      value={playerRankingSearch}
+                      onChange={(e) => setPlayerRankingSearch(e.target.value)}
+                      className="w-full bg-slate-800/80 text-white text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-700/60 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
+
+                {/* Scrollable list of all players */}
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {allPlayersSorted
+                    .filter((p) => {
+                      if (!playerRankingSearch.trim()) return true;
+                      const { displayName: pName } = parseNicknameAndAvatar(p.nickname || "");
+                      return pName.toLowerCase().includes(playerRankingSearch.toLowerCase().trim());
+                    })
+                    .map((p) => {
+                      const rank = allPlayersSorted.findIndex(item => item.id === p.id) + 1;
+                      const { displayName: pName, avatarUrl: pAvatar, isVerified: pVer } = parseNicknameAndAvatar(p.nickname || "");
+                      const isSelf = p.id === playerUid || pName === displayName;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition ${
+                            isSelf
+                              ? "bg-indigo-600/25 border-indigo-500 shadow-xs"
+                              : rank === 1
+                              ? "bg-amber-500/10 border-amber-500/30"
+                              : rank === 2
+                              ? "bg-slate-300/10 border-slate-400/30"
+                              : rank === 3
+                              ? "bg-amber-700/10 border-amber-700/30"
+                              : "bg-slate-800/50 border-slate-800"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-6 h-6 rounded-full font-mono font-black text-[10px] flex items-center justify-center shrink-0 ${
+                              rank === 1
+                                ? "bg-amber-500 text-slate-950 font-black"
+                                : rank === 2
+                                ? "bg-slate-300 text-slate-950 font-black"
+                                : rank === 3
+                                ? "bg-amber-700 text-white font-black"
+                                : "bg-slate-800 text-slate-400"
+                            }`}>
+                              {rank}
+                            </div>
+                            <img src={pAvatar} alt="avatar" className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1">
+                                <p className={`text-xs font-bold truncate ${isSelf ? "text-indigo-300 font-extrabold" : "text-slate-200"}`}>
+                                  {pName.replace(/[:|~]/g, "")}
+                                </p>
+                                {isSelf && (
+                                  <span className="bg-indigo-500 text-white text-[9px] font-extrabold px-1.5 py-0.2 rounded-full shrink-0">
+                                    Jij
+                                  </span>
+                                )}
+                                {pVer && (
+                                  <span className="text-blue-400 text-[10px] shrink-0">✓</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 pl-2">
+                            <span className={`font-mono font-bold text-xs ${
+                              rank === 1 ? "text-amber-400" : isSelf ? "text-indigo-300" : "text-slate-300"
+                            }`}>
+                              {p.score} pt
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Action button */}
                 <button
                   onClick={onExit}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white py-4 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md mt-4"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 rounded-xl font-bold tracking-wide transition cursor-pointer shadow-md text-sm uppercase flex items-center justify-center gap-2 mt-2"
                 >
-                  Sluiten en Terug
+                  <span>Klaar en Sluiten</span>
                 </button>
               </motion.div>
             );

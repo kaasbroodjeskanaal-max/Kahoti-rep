@@ -108,7 +108,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border border-amber-300/40 shadow-xl",
         textColor: "text-amber-950 dark:text-amber-100",
         accentColor: "bg-orange-500 border-orange-650",
-        emoji: "☀️",
+        emoji: "",
         name: "Zomer",
       };
     case "winter":
@@ -117,7 +117,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-white/75 dark:bg-slate-900/75 backdrop-blur-md border border-sky-300/30 shadow-xl",
         textColor: "text-sky-950 dark:text-sky-100",
         accentColor: "bg-cyan-500 border-cyan-650",
-        emoji: "❄️",
+        emoji: "",
         name: "Winter",
       };
     case "halloween":
@@ -126,7 +126,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-slate-900/90 border border-purple-900/50 shadow-2xl",
         textColor: "text-orange-100 dark:text-orange-50",
         accentColor: "bg-orange-600 border-orange-700",
-        emoji: "🎃",
+        emoji: "",
         name: "Halloween",
       };
     case "space":
@@ -135,7 +135,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-slate-900/80 border border-indigo-900/40 shadow-2xl backdrop-blur-xs",
         textColor: "text-indigo-50 dark:text-indigo-100",
         accentColor: "bg-indigo-600 border-indigo-800",
-        emoji: "🪐",
+        emoji: "",
         name: "Kosmisch",
       };
     case "neon":
@@ -144,7 +144,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-slate-900/90 border border-fuchsia-900/50 shadow-2xl",
         textColor: "text-fuchsia-100",
         accentColor: "bg-fuchsia-600 border-fuchsia-700",
-        emoji: "⚡",
+        emoji: "",
         name: "Neon Retro",
       };
     case "default":
@@ -154,7 +154,7 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         cardBg: "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm",
         textColor: "text-slate-800 dark:text-slate-100",
         accentColor: "bg-indigo-600 border-indigo-700",
-        emoji: "🎉",
+        emoji: "",
         name: "Standaard",
       };
   }

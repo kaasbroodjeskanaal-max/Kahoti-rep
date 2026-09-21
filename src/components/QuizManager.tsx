@@ -1,9 +1,58 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, Question } from "../types";
 import { parseQuizTitle } from "../avatarUtils";
-import { Plus, Trash2, Play, ArrowLeft, HelpCircle, Loader2, Settings, Copy, ChevronUp, ChevronDown, Image, Sliders, Music, Info, Clock, Award, X, Check } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Play,
+  Pause,
+  ArrowLeft,
+  ArrowRight,
+  HelpCircle,
+  Loader2,
+  Settings,
+  Copy,
+  ChevronUp,
+  ChevronDown,
+  Image as ImageIcon,
+  Sliders,
+  Music,
+  Clock,
+  Award,
+  X,
+  Check,
+  Search,
+  Sparkles,
+  LogOut,
+  User,
+  Gamepad2,
+  Shuffle,
+  CheckCircle2,
+  AlertCircle,
+  Film,
+  Layers,
+  Calendar,
+  Moon,
+  Sun,
+  Snowflake,
+  Ghost,
+  Orbit,
+  Zap,
+  Scale,
+  CircleDot,
+  Puzzle,
+  SlidersHorizontal,
+  FileText,
+  Lock,
+  Trophy,
+  Timer,
+  ThumbsUp,
+  ThumbsDown,
+  Lightbulb,
+} from "lucide-react";
 import { translations } from "../translations";
+import { ImageUploader } from "./ImageUploader";
 
 interface QuizManagerProps {
   lang?: "nl" | "en";
@@ -11,8 +60,37 @@ interface QuizManagerProps {
   onBack: () => void;
 }
 
+const THEME_OPTIONS = [
+  { id: "default", label: "Standaard Donker", icon: Moon, desc: "Klassiek donkerblauw" },
+  { id: "summer", label: "Zomer Strand", icon: Sun, desc: "Zonnige zand & zee sfeer" },
+  { id: "winter", label: "Winter Frost", icon: Snowflake, desc: "Frisse sneeuw & ijskristallen" },
+  { id: "halloween", label: "Halloween", icon: Ghost, desc: "Spooky pompoenen & paars" },
+  { id: "space", label: "Kosmisch Heelal", icon: Orbit, desc: "Sterrennevels & planeten" },
+  { id: "neon", label: "Neon Synthwave", icon: Zap, desc: "Retro jaren 80 neon glow" },
+] as const;
+
+const MUSIC_OPTIONS = [
+  {
+    url: "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3",
+    label: "Soundtrack 1: Mellow Grooves",
+    badge: "Standaard",
+  },
+  {
+    url: "https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3",
+    label: "Soundtrack 2: 8-Bit Arcade",
+    badge: "Retro",
+  },
+  {
+    url: "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3",
+    label: "Soundtrack 3: Upbeat Energie",
+    badge: "Dynamisch",
+  },
+];
+
 export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizManagerProps) {
   const t = translations[lang];
+
+  // Quizzes list state
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
     try {
       const cached = localStorage.getItem("cached_quizzes");
@@ -21,6 +99,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       return [];
     }
   });
+
   const [isLoading, setIsLoading] = useState(() => {
     try {
       const cached = localStorage.getItem("cached_quizzes");
@@ -29,9 +108,11 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       return true;
     }
   });
-  const [activeTab, setActiveTab] = useState<"list" | "create">("list");
 
-  // Manual Creation State
+  const [activeTab, setActiveTab] = useState<"list" | "create">("list");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Quiz Editor State
   const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -39,6 +120,12 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const [theme, setTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
   const [lobbyTheme, setLobbyTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
   const [lobbyMusicUrl, setLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Audio Preview state
+  const [playingMusicUrl, setPlayingMusicUrl] = useState<string | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+
   const [questions, setQuestions] = useState<Omit<Question, "id">[]>([
     {
       questionText: "",
@@ -54,29 +141,48 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   ]);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState<number>(-1);
 
-  const getConfigTypeStyle = (type?: string) => {
-    switch (type) {
-      case "true_false":
-        return { label: "Waar/Niet Waar", bg: "bg-sky-500/10 dark:bg-sky-500/20", text: "text-sky-600 dark:text-sky-400" };
-      case "wheel_spin":
-        return { label: "Geluksrad", bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-500 dark:text-amber-400" };
-      case "puzzle":
-        return { label: "Puzzel", bg: "bg-purple-500/10 dark:bg-purple-500/20", text: "text-purple-500 dark:text-purple-400" };
-      case "slider":
-        return { label: "Schuifbalk", bg: "bg-teal-500/10 dark:bg-teal-500/20", text: "text-teal-500 dark:text-teal-400" };
-      default:
-        return { label: "Meerkeuze", bg: "bg-indigo-500/10 dark:bg-indigo-500/20", text: "text-indigo-500 dark:text-indigo-400" };
-    }
-  };
-
-  // Optional Authentication State
+  // Auth State
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [showAuthForm, setShowAuthForm] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authError, setAuthError] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
+
+  const getQuestionTypeMeta = (type?: string) => {
+    switch (type) {
+      case "true_false":
+        return {
+          label: "Waar / Niet waar",
+          color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60",
+          icon: Scale,
+        };
+      case "wheel_spin":
+        return {
+          label: "Geluksrad",
+          color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60",
+          icon: CircleDot,
+        };
+      case "puzzle":
+        return {
+          label: "Puzzel",
+          color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60",
+          icon: Puzzle,
+        };
+      case "slider":
+        return {
+          label: "Schuifbalk",
+          color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60",
+          icon: SlidersHorizontal,
+        };
+      default:
+        return {
+          label: "Meerkeuze",
+          color: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60",
+          icon: FileText,
+        };
+    }
+  };
 
   const getUserId = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -98,7 +204,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     return localId;
   };
 
-  // Retrieve existing quizzes
   const fetchQuizzes = async (silent = false) => {
     if (!silent && quizzes.length === 0) {
       setIsLoading(true);
@@ -132,7 +237,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         };
       });
 
-      // Sort newest first
       const sorted = list.sort((a, b) => b.id.localeCompare(a.id));
       setQuizzes(sorted);
       try {
@@ -160,20 +264,41 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
 
     return () => {
       subscription.unsubscribe();
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
     };
   }, []);
 
   useEffect(() => {
-    // If we have cached quizzes, fetch silently to refresh in the background
     const silent = quizzes.length > 0;
     fetchQuizzes(silent);
   }, [currentUser]);
+
+  const handleToggleMusicPreview = (url: string) => {
+    if (playingMusicUrl === url) {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+      setPlayingMusicUrl(null);
+    } else {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+      const audio = new Audio(url);
+      audio.volume = 0.5;
+      audio.play().catch((err) => console.warn("Audio afspelen mislukt:", err));
+      audio.onended = () => setPlayingMusicUrl(null);
+      audioPreviewRef.current = audio;
+      setPlayingMusicUrl(url);
+    }
+  };
 
   const handleSignOut = async () => {
     const lastAuth = localStorage.getItem("last_auth_action_timestamp");
     const now = Date.now();
     if (lastAuth && now - Number(lastAuth) < 5000) {
-      alert("In- en uitloggen gebeurt te snel! Wacht 5 seconden.");
+      alert("In- en uitloggen gebeurt te snel! Wacht even.");
       return;
     }
     localStorage.setItem("last_auth_action_timestamp", String(now));
@@ -184,14 +309,14 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
-    
+
     const now = Date.now();
     const lastAuth = localStorage.getItem("last_auth_action_timestamp");
     if (lastAuth && now - Number(lastAuth) < 5000) {
-      setAuthError("Je voert authenticatie-acties te snel achter elkaar uit! Wacht een paar seconden.");
+      setAuthError("Wacht 5 seconden voor je volgende authenticatie poging.");
       return;
     }
-    
+
     if (authMode === "register") {
       const lastSignUp = localStorage.getItem("last_signup_timestamp");
       if (lastSignUp && now - Number(lastSignUp) < 30000) {
@@ -210,7 +335,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         if (error) throw error;
         localStorage.setItem("last_auth_action_timestamp", String(now));
         setCurrentUser(data.user);
-        setShowAuthForm(false);
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: authEmail.trim(),
@@ -219,9 +343,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         if (error) throw error;
         localStorage.setItem("last_auth_action_timestamp", String(now));
         localStorage.setItem("last_signup_timestamp", String(now));
-        alert("Account succesvol geregistreerd!");
         setCurrentUser(data.user);
-        setShowAuthForm(false);
       }
     } catch (err: any) {
       setAuthError(err.message || "Er is een fout opgetreden bij authenticatie.");
@@ -230,7 +352,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     }
   };
 
-  // Manual Questions Handlers (Slide-Deck presentation actions)
+  // Question Management
   const handleAddQuestion = () => {
     const newIdx = questions.length;
     setQuestions([
@@ -250,7 +372,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     setActiveQuestionIdx(newIdx);
   };
 
-  const handleRemoveQuestionAndSelect = (idx: number) => {
+  const handleRemoveQuestion = (idx: number) => {
     if (questions.length === 1) return;
     const nextList = questions.filter((_, i) => i !== idx);
     setQuestions(nextList);
@@ -289,10 +411,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     setActiveQuestionIdx(targetIdx);
   };
 
-  const handleRemoveQuestion = (idx: number) => {
-    handleRemoveQuestionAndSelect(idx);
-  };
-
   const handleQuestionChange = (idx: number, field: string, value: any) => {
     const updated = [...questions];
     if (field === "questionText") {
@@ -310,7 +428,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       updated[idx].correctOptionIndices = [Number(value)];
     } else if (field === "correctOptionIndices") {
       updated[idx].correctOptionIndices = value;
-      // sync legacy index as first item
       if (value && value.length > 0) {
         updated[idx].correctOptionIndex = value[0];
       }
@@ -321,17 +438,17 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         updated[idx].correctOptionIndices = [0];
         updated[idx].correctOptionIndex = 0;
       } else if (value === "wheel_spin") {
-        updated[idx].options = ["Bankroet ❌", "Min 500 📉", "Gelijkspel 🤝", "Plus 250 💰", "Plus 500 ⭐", "Plus 1000 👑"];
+        updated[idx].options = ["Bankroet", "Min 500", "Gelijkspel", "Plus 250", "Plus 500", "Plus 1000"];
         updated[idx].correctOptionIndices = [];
         updated[idx].correctOptionIndex = -1;
       } else if (value === "puzzle") {
-        updated[idx].options = ["🔴 Rood", "🔵 Blauw", "🟡 Geel", "🟢 Groen"];
+        updated[idx].options = ["Rood", "Blauw", "Geel", "Groen"];
         updated[idx].correctOptionIndices = [0, 1, 2, 3];
-        updated[idx].correctOptionIndex = 123; // represents sequence 0,1,2,3
+        updated[idx].correctOptionIndex = 123;
       } else if (value === "slider") {
         updated[idx].options = ["1", "2", "3", "4", "5"];
         updated[idx].correctOptionIndices = [2];
-        updated[idx].correctOptionIndex = 2; // default is slider value 3 (which is index 2)
+        updated[idx].correctOptionIndex = 2;
       } else {
         updated[idx].options = ["", "", "", ""];
         updated[idx].correctOptionIndices = [0];
@@ -351,14 +468,14 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const handleRemoveOptionFromQuestion = (qIdx: number, oIdx: number) => {
     const updated = [...questions];
     if (updated[qIdx].options.length <= 2) return;
-    
+
     updated[qIdx].options = updated[qIdx].options.filter((_, idx) => idx !== oIdx);
-    
+
     const correctIndices = updated[qIdx].correctOptionIndices || [updated[qIdx].correctOptionIndex ?? 0];
     const newCorrect = correctIndices
       .filter((idx) => idx !== oIdx)
       .map((idx) => (idx > oIdx ? idx - 1 : idx));
-      
+
     updated[qIdx].correctOptionIndices = newCorrect.length > 0 ? newCorrect : [0];
     updated[qIdx].correctOptionIndex = updated[qIdx].correctOptionIndices[0];
     setQuestions(updated);
@@ -370,7 +487,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     setQuestions(updated);
   };
 
-  // Start editing a quiz
   const handleEditQuiz = (quiz: Quiz) => {
     setEditingQuizId(quiz.id);
     setTitle(parseQuizTitle(quiz.title).cleanTitle);
@@ -395,17 +511,46 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       questionType: q.questionType ?? "multiple_choice",
       theme: quizTheme,
       lobbyMusicUrl: quizLobbyMusicUrl,
+      sliderMin: q.sliderMin,
+      sliderMax: q.sliderMax,
+      sliderStep: q.sliderStep,
     })));
     setActiveQuestionIdx(-1);
     setActiveTab("create");
   };
 
-  // Save manual quiz
-  const handleSaveManualQuiz = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return alert("Vul een titel in.");
+  const handleResetForm = () => {
+    setEditingQuizId(null);
+    setTitle("");
+    setDescription("");
+    setImageUrl("");
+    setTheme("default");
+    setLobbyTheme("default");
+    setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
+    setQuestions([
+      {
+        questionText: "",
+        imageUrl: "",
+        timeLimit: 20,
+        points: 1000,
+        options: ["", "", "", ""],
+        correctOptionIndex: 0,
+        correctOptionIndices: [0],
+        questionType: "multiple_choice",
+        theme: "default",
+      },
+    ]);
+    setActiveQuestionIdx(-1);
+  };
 
-    // Cooldown check: 1 quiz per 10 minutes for new quiz creations only (exclude edits)
+  const handleSaveManualQuiz = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!title.trim()) {
+      alert("Geef de quiz een titel.");
+      setActiveQuestionIdx(-1);
+      return;
+    }
+
     if (!editingQuizId) {
       const lastCreationStr = localStorage.getItem("last_quiz_creation_time");
       if (lastCreationStr) {
@@ -420,21 +565,31 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       }
     }
 
-    // Validate questions
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      if (!q.questionText.trim()) return alert(`Vraag ${i + 1} heeft geen tekst.`);
+      if (!q.questionText.trim()) {
+        alert(`Vraag #${i + 1} heeft nog geen vraagtekst.`);
+        setActiveQuestionIdx(i);
+        return;
+      }
       for (let o = 0; o < q.options.length; o++) {
-        if (!q.options[o].trim()) return alert(`Vraag ${i + 1}, optie ${o + 1} is leeg.`);
+        if (!q.options[o].trim()) {
+          alert(`Vraag #${i + 1}, optie #${o + 1} is nog leeg.`);
+          setActiveQuestionIdx(i);
+          return;
+        }
       }
       if (q.questionType !== "wheel_spin") {
         const corIndices = q.correctOptionIndices || [q.correctOptionIndex ?? 0];
         if (corIndices.length === 0) {
-          return alert(`Vraag ${i + 1} moet ten minste één correct antwoord hebben.`);
+          alert(`Vraag #${i + 1} moet ten minste één correct antwoord hebben.`);
+          setActiveQuestionIdx(i);
+          return;
         }
       }
     }
 
+    setIsSaving(true);
     try {
       const uId = await getUserId();
       const saveQuizId = editingQuizId || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -444,6 +599,7 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
             const v = c === "x" ? r : (r & 0x3) | 0x8;
             return v.toString(16);
           }));
+
       const parsedQuestions = questions.map((q, idx) => ({
         ...q,
         correctOptionIndex: q.correctOptionIndices && q.correctOptionIndices.length > 0 ? q.correctOptionIndices[0] : (q.correctOptionIndex ?? 0),
@@ -472,7 +628,6 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
       };
 
       if (editingQuizId) {
-        // Ownership safety check: confirm the quiz belongs to the user
         const { data: existingQuiz } = await supabase
           .from("quizzes")
           .select("created_by")
@@ -480,52 +635,30 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
           .single();
 
         if (existingQuiz && existingQuiz.created_by !== uId) {
-          throw new Error("Je bent niet geautoriseerd om de quiz van een andere gebruiker te bewerken.");
+          throw new Error("Je bent niet geautoriseerd om deze quiz aan te passen.");
         }
       }
 
-      const { error } = await supabase
-        .from("quizzes")
-        .upsert(payload);
-
+      const { error } = await supabase.from("quizzes").upsert(payload);
       if (error) throw new Error(error.message);
 
-      // Record successful creation time for cooldown
       if (!editingQuizId) {
         localStorage.setItem("last_quiz_creation_time", new Date().toISOString());
       }
 
-      // Clear state and reload
-      setEditingQuizId(null);
-      setTitle("");
-      setDescription("");
-      setImageUrl("");
-      setTheme("default");
-      setLobbyTheme("default");
-      setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
-      setQuestions([
-        {
-          questionText: "",
-          imageUrl: "",
-          timeLimit: 20,
-          points: 1000,
-          options: ["", "", "", ""],
-          correctOptionIndex: 0,
-          correctOptionIndices: [0],
-          questionType: "multiple_choice",
-        },
-      ]);
+      handleResetForm();
       setActiveTab("list");
       fetchQuizzes(true);
     } catch (err: any) {
       console.error(err);
-      alert("Fout bij opslaan van de quiz: " + err.message);
+      alert("Fout bij opslaan: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Delete quiz
   const handleDeleteQuiz = async (quizId: string) => {
-    if (!confirm("Weet je zeker dat je deze quiz wilt verwijderen?")) return;
+    if (!confirm("Weet je zeker dat je deze quiz wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")) return;
     try {
       const uId = await getUserId();
       const { error } = await supabase
@@ -542,1017 +675,1168 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     }
   };
 
+  const filteredQuizzes = quizzes.filter((q) => {
+    const clean = parseQuizTitle(q.title || "").cleanTitle.toLowerCase();
+    const desc = (q.description || "").toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+    return clean.includes(query) || desc.includes(query);
+  });
+
+  const currentQuestion = activeQuestionIdx >= 0 ? questions[activeQuestionIdx] : null;
+
   return (
-    <div className={`${activeTab === "create" ? "max-w-[1550px]" : "max-w-4xl"} mx-auto px-4 py-8 transition-all duration-300`}>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-medium transition cursor-pointer"
-        >
-          <ArrowLeft className="w-5 h-5" /> {lang === "nl" ? "Terug naar start" : "Back to start"}
-        </button>
-        <h1 className="text-3xl font-bold font-display tracking-tight text-slate-800 dark:text-white">
-          {lang === "nl" ? "Quiz Beheerder" : "Quiz Creator"}
-        </h1>
-      </div>
-
-      {!currentUser ? (
-        <div className="max-w-md mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-md space-y-6 mt-12">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-extrabold font-display text-slate-800 dark:text-white">
-              {authMode === "login" 
-                ? (lang === "nl" ? "Inloggen" : "Log In") 
-                : (lang === "nl" ? "Account aanmaken" : "Sign Up")}
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400">
-              {lang === "nl" 
-                ? "Je moet ingelogd zijn om quizzen aan te maken, te beheren of te hosten." 
-                : "Register or log in to keep your custom quizzes stored securely."}
-            </p>
-          </div>
-
-          <form onSubmit={handleAuthSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                {lang === "nl" ? "E-mailadres" : "Email Address"}
-              </label>
-              <input
-                type="email"
-                required
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="bijv. je-naam@live.nl"
-                className="w-full px-4 py-3 text-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                {lang === "nl" ? "Wachtwoord" : "Password"}
-              </label>
-              <input
-                type="password"
-                required
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder={authMode === "login" ? (lang === "nl" ? "Wachtwoord" : "Password") : (lang === "nl" ? "Minimaal 6 karakters" : "At least 6 characters")}
-                className="w-full px-4 py-3 text-sm border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition"
-              />
-            </div>
-
-            {authError && (
-              <p className="text-xs text-red-500 dark:text-red-400 font-semibold bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-3 rounded-xl">
-                {authError}
-              </p>
-            )}
-
+    <div id="quiz-manager-root" className="min-h-screen bg-slate-50/50 dark:bg-slate-950 pb-20 text-slate-900 dark:text-slate-100">
+      {/* Top Application Bar */}
+      <header id="quiz-manager-header" className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
             <button
-              type="submit"
-              disabled={authSubmitting}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition cursor-pointer shadow-xs flex items-center justify-center gap-2"
+              id="btn-nav-back"
+              onClick={onBack}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px]"
             >
-              {authSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {authSubmitting 
-                ? (lang === "nl" ? "Bezig met laden..." : "Loading...") 
-                : authMode === "login" 
-                  ? (lang === "nl" ? "Inloggen" : "Log In") 
-                  : (lang === "nl" ? "Account Registreren" : "Register Account")}
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">{lang === "nl" ? "Startscherm" : "Home"}</span>
             </button>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode(authMode === "login" ? "register" : "login");
-                  setAuthError("");
-                }}
-                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-              >
-                {authMode === "login" 
-                  ? (lang === "nl" ? "Nog geen account? Registreer hier" : "No account yet? Register here") 
-                  : (lang === "nl" ? "Heb je al een account? Log in" : "Already have an account? Log in")}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <>
-          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl p-4 mb-6 flex justify-between items-center">
-            <div className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
-              {lang === "nl" ? "Je bent ingelogd als " : "You are logged in as "}
-              <span className="font-bold underline">{currentUser.email}</span>
-              {lang === "nl" ? ". Je quizzen worden veilig in de cloud bewaard!" : ". Your quizzes are securely saved in the cloud!"}
-            </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-200 underline cursor-pointer"
-            >
-              {lang === "nl" ? "Uitloggen" : "Sign Out"}
-            </button>
-          </div>
-
-      {/* Tabs */}
-      <div className="flex border border-gray-100 dark:border-slate-800 mb-8 bg-white dark:bg-slate-900 p-1 rounded-xl shadow-xs">
-        <button
-          onClick={() => setActiveTab("list")}
-          className={`flex-1 py-3 text-center font-semibold rounded-lg transition cursor-pointer ${
-            activeTab === "list"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800"
-          }`}
-        >
-          {lang === "nl" ? "Mijn Quizzen" : "My Quizzes"} ({quizzes.length})
-        </button>
-        <button
-          onClick={() => {
-            setEditingQuizId(null);
-            setTitle("");
-            setDescription("");
-            setImageUrl("");
-            setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
-            setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0, correctOptionIndices: [0], questionType: "multiple_choice" }]);
-            setActiveQuestionIdx(-1);
-            setActiveTab("create");
-          }}
-          className={`flex-1 py-3 text-center font-semibold rounded-lg transition cursor-pointer flex items-center justify-center gap-2 ${
-            activeTab === "create"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800"
-          }`}
-        >
-          <Plus className="w-4 h-4" /> {lang === "nl" ? "Handmatig Maken" : "Create Manually"}
-        </button>
-      </div>
-
-      {/* Tab Contents: List */}
-      {activeTab === "list" && (
-        <div>
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-              <p className="text-gray-500 dark:text-slate-400">{lang === "nl" ? "Laden van jouw quizzen..." : "Loading your quizzes..."}</p>
-            </div>
-          ) : quizzes.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-gray-300 dark:border-slate-800">
-              <HelpCircle className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-2">
-                {lang === "nl" ? "Nog geen quizzen gevonden" : "No quizzes found yet"}
-              </h2>
-              <p className="text-gray-500 dark:text-slate-400 max-w-sm mx-auto mb-6">
-                {lang === "nl" 
-                  ? "Creëer direct jouw eerste interactieve quiz en host hem live voor je vrienden of collega's!"
-                  : "Create your very first live quiz right away to start playing with others!"}
-              </p>
-              <div className="flex justify-center">
-                <button
-                  onClick={() => {
-                    setEditingQuizId(null);
-                    setTitle("");
-                    setDescription("");
-                    setImageUrl("");
-                    setLobbyMusicUrl("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
-                    setQuestions([{ questionText: "", imageUrl: "", timeLimit: 20, points: 1000, options: ["", "", "", ""], correctOptionIndex: 0, correctOptionIndices: [0], questionType: "multiple_choice" }]);
-                    setActiveTab("create");
-                  }}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold shadow-xs transition cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" /> {lang === "nl" ? "Handmatig Aanmaken" : "Create Manually"}
-                </button>
+            <div className="h-4 w-px bg-slate-200 dark:border-slate-800" />
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-sm">
+                <Zap className="w-4 h-4" />
+              </span>
+              <div>
+                <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                  Kahoti Studio
+                </h1>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium block">
+                  {activeTab === "create"
+                    ? editingQuizId
+                      ? "Quiz bewerken"
+                      : "Nieuwe quiz maken"
+                    : "Mijn quiz bibliotheek"}
+                </span>
               </div>
             </div>
-          ) : (
-            <div className="grid md:grid-cols-2 gap-4">
-              {quizzes.map((quiz) => (
-                <div
-                  key={quiz.id}
-                  className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
+          </div>
+
+          {/* Right Status / Auth Chip */}
+          <div className="flex items-center gap-3">
+            {currentUser ? (
+              <div id="user-profile-chip" className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[130px] sm:max-w-[200px]">
+                  {currentUser.email}
+                </span>
+                <button
+                  id="btn-signout"
+                  onClick={handleSignOut}
+                  className="text-slate-400 hover:text-red-500 transition p-1 cursor-pointer"
+                  title="Uitloggen"
                 >
-                  <div>
-                    {quiz.imageUrl && (
-                      <div className="mb-4 -mx-6 -mt-6">
-                        <img 
-                          src={quiz.imageUrl} 
-                          alt="Quiz afbeelding" 
-                          referrerPolicy="no-referrer"
-                          className="w-full h-40 object-cover" 
-                        />
-                      </div>
-                    )}
-                    <h3 className="text-xl font-bold text-slate-800 dark:text-white font-display mb-2 flex items-center gap-1.5">
-                      <span>{parseQuizTitle(quiz.title || "").cleanTitle}</span>
-                      {parseQuizTitle(quiz.title || "").isVerified && (
-                        <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-4 h-4 text-[10px] font-bold shrink-0 shadow-sm" title="Geverifieerde Quiz">
-                          ✓
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-gray-500 dark:text-slate-400 text-sm line-clamp-2 mb-4">
-                      {quiz.description || "Geen beschrijving."}
-                    </p>
-                    <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 mb-4">
-                      {quiz.questions.length} {quiz.questions.length === 1 ? "vraag" : "vragen"}
-                    </div>
-                  </div>
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : null}
 
-                  <div className="flex gap-2 border-t border-gray-100 dark:border-slate-800 pt-4 mt-2">
-                    <button
-                      onClick={() => onHostGame(quiz)}
-                      className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-semibold transition cursor-pointer"
-                    >
-                      <Play className="w-4 h-4 fill-current" /> Host Quiz
-                    </button>
-                    <button
-                      onClick={() => handleEditQuiz(quiz)}
-                      className="text-gray-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 p-2.5 border border-gray-105 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-800 rounded-xl transition cursor-pointer font-bold"
-                      title="Bewerken"
-                    >
-                      Bewerken
-                    </button>
-                    <button
-                      onClick={() => handleDeleteQuiz(quiz.id)}
-                      className="text-red-500 hover:text-white hover:bg-red-600 p-2.5 border border-red-100 dark:border-red-900/50 hover:border-red-500 rounded-xl transition cursor-pointer"
-                      title="Verwijderen"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab Contents: Manual creation form */}
-      {activeTab === "create" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* LEFT COLUMN: Slide / Question Deck Sidebar */}
-          <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-8 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 bg-slate-50/50 dark:bg-slate-950/20 p-4 rounded-2xl border border-gray-100 dark:border-slate-800/40">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-800">
-              <span className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider font-display">🎞️ Dia Overzicht</span>
-              <span className="text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold px-2 py-0.5 rounded-full">
-                {questions.length + 1} Dias
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {/* Slide -1: Quiz Details */}
+            {activeTab === "create" && (
               <button
+                id="btn-top-save-quiz"
                 type="button"
-                onClick={() => setActiveQuestionIdx(-1)}
-                className={`w-full text-left p-4 rounded-[1.25rem] border transition-all duration-300 flex flex-col gap-1.5 cursor-pointer group relative overflow-hidden ${
-                  activeQuestionIdx === -1
-                    ? "bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-700 text-white shadow-xl shadow-indigo-600/15 scale-[1.02] -translate-y-0.5"
-                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-800 dark:text-slate-200 hover:-translate-y-0.5"
-                }`}
+                onClick={() => handleSaveManualQuiz()}
+                disabled={isSaving}
+                className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-98 text-white font-bold text-xs shadow-sm shadow-purple-600/20 disabled:opacity-50 transition cursor-pointer min-h-[44px]"
               >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-black uppercase tracking-widest ${
-                    activeQuestionIdx === -1 ? "text-indigo-200" : "text-indigo-600 dark:text-indigo-400"
-                  }`}>
-                    ⚙️ Instellingen
-                  </span>
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
-                    activeQuestionIdx === -1 ? "bg-indigo-700 text-indigo-100" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                  }`}>
-                    THEMA
-                  </span>
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>{editingQuizId ? "Wijzigingen Opslaan" : "Quiz Opslaan"}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+        {!currentUser ? (
+          /* Authentication Card */
+          <div id="auth-panel" className="max-w-md mx-auto my-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto text-xl font-bold">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                {authMode === "login" ? "Inloggen bij Kahoti" : "Account Registreren"}
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Log in om je quizzen op al je apparaten te bewaren en live te hosten.
+              </p>
+            </div>
+
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                  E-mailadres
+                </label>
+                <input
+                  id="auth-input-email"
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="jouw-email@voorbeeld.nl"
+                  className="w-full px-4 py-3 text-sm border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                  Wachtwoord
+                </label>
+                <input
+                  id="auth-input-password"
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder={authMode === "login" ? "Wachtwoord" : "Minimaal 6 karakters"}
+                  className="w-full px-4 py-3 text-sm border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition"
+                />
+              </div>
+
+              {authError && (
+                <div className="flex items-center gap-2 p-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{authError}</span>
                 </div>
-                <span className="font-extrabold text-sm truncate">
-                  {title.trim() || "Mijn Grote Quiz"}
-                </span>
-                <span className={`text-[11px] truncate ${
-                  activeQuestionIdx === -1 ? "text-indigo-100" : "text-slate-400 dark:text-slate-500"
-                }`}>
-                  {description.trim() || "Algemene details & thema..."}
-                </span>
-                {activeQuestionIdx === -1 && (
-                  <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white" />
+              )}
+
+              <button
+                id="btn-auth-submit"
+                type="submit"
+                disabled={authSubmitting}
+                className="w-full min-h-[44px] bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-xl transition cursor-pointer shadow-sm flex items-center justify-center gap-2 text-sm"
+              >
+                {authSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Laden...</span>
+                  </>
+                ) : (
+                  <span>{authMode === "login" ? "Inloggen" : "Account Aanmaken"}</span>
                 )}
               </button>
 
-              {/* Loop over questions as slides */}
-              {questions.map((q, qIdx) => {
-                const isActive = activeQuestionIdx === qIdx;
-                const typeStyle = getConfigTypeStyle(q.questionType);
-                
-                return (
-                  <div
-                    key={qIdx}
-                    onClick={() => setActiveQuestionIdx(qIdx)}
-                    className={`w-full text-left p-4 rounded-[1.25rem] border transition-all duration-300 flex flex-col gap-1.5 cursor-pointer group relative overflow-hidden ${
-                      isActive
-                        ? "bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-700 text-white shadow-xl shadow-indigo-600/15 scale-[1.02] -translate-y-0.5"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-800 dark:text-slate-200 hover:-translate-y-0.5"
-                    }`}
-                  >
-                    {/* Top slide indicator & type badge */}
-                    <div className="flex items-center justify-between gap-1.5 mb-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={`text-xs font-black shrink-0 ${
-                          isActive ? "text-indigo-100" : "text-slate-400 dark:text-slate-500"
-                        }`}>
-                          #{qIdx + 1}
-                        </span>
-                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full truncate shrink-0 ${
-                          isActive 
-                            ? "bg-indigo-700 text-indigo-100 border border-white/10"
-                            : `${typeStyle.bg} ${typeStyle.text}`
-                        }`}>
-                          {typeStyle.label}
-                        </span>
-                      </div>
-
-                      {/* Hover action bar */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveQuestion(qIdx, "up");
-                          }}
-                          disabled={qIdx === 0}
-                          className={`p-1 rounded-md transition disabled:opacity-20 cursor-pointer ${
-                            isActive 
-                              ? "hover:bg-indigo-700 text-indigo-200" 
-                              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-                          }`}
-                          title="Omhoog"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMoveQuestion(qIdx, "down");
-                          }}
-                          disabled={qIdx === questions.length - 1}
-                          className={`p-1 rounded-md transition disabled:opacity-20 cursor-pointer ${
-                            isActive 
-                              ? "hover:bg-indigo-700 text-indigo-200" 
-                              : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-                          }`}
-                          title="Omlaag"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDuplicateQuestion(qIdx);
-                          }}
-                          className={`p-1 rounded-md transition cursor-pointer ${
-                            isActive ? "hover:bg-indigo-700 text-indigo-200" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
-                          }`}
-                          title="Dupliceer"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        {questions.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveQuestion(qIdx);
-                            }}
-                            className={`p-1 rounded-md transition cursor-pointer ${
-                              isActive ? "hover:bg-indigo-700 text-red-200" : "hover:bg-red-50 dark:hover:bg-red-950/40 text-red-500"
-                            }`}
-                            title="Verwijder"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Question text truncated */}
-                    <span className="font-extrabold text-xs truncate">
-                      {q.questionText.trim() || "Lege vraagstelling..."}
-                    </span>
-
-                    {/* Stats indicators */}
-                    <div className={`flex items-center gap-2.5 text-[10px] font-bold pt-1 ${
-                      isActive ? "text-indigo-200" : "text-slate-400 dark:text-slate-500"
-                    }`}>
-                      <span className="flex items-center gap-0.5">
-                        <Clock className="w-2.5 h-2.5 shrink-0" />
-                        {q.timeLimit}s
-                      </span>
-                      <span className="flex items-center gap-0.5">
-                        <Award className="w-2.5 h-2.5 shrink-0" />
-                        {q.points}pt
-                      </span>
-                    </div>
-                    {isActive && (
-                      <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-white" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Slide Action Row Buttons */}
-            <div className="pt-4 border-t border-gray-200 dark:border-slate-800 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleAddQuestion}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-black transition cursor-pointer text-xs uppercase tracking-widest hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-indigo-500/10 duration-200"
-              >
-                <Plus className="w-3.5 h-3.5" /> Nieuwe Dia 🚀
-              </button>
-            </div>
+              <div className="text-center pt-2">
+                <button
+                  id="btn-toggle-auth-mode"
+                  type="button"
+                  onClick={() => {
+                    setAuthMode(authMode === "login" ? "register" : "login");
+                    setAuthError("");
+                  }}
+                  className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                >
+                  {authMode === "login"
+                    ? "Nog geen account? Registreer gratis"
+                    : "Heb je al een account? Log in"}
+                </button>
+              </div>
+            </form>
           </div>
+        ) : (
+          <>
+            {/* View Mode Segmented Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="inline-flex p-1 bg-slate-200/70 dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                <button
+                  id="tab-quiz-list"
+                  type="button"
+                  onClick={() => setActiveTab("list")}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer min-h-[44px] ${
+                    activeTab === "list"
+                      ? "bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Layers className="w-4 h-4" />
+                  <span>Mijn Quizzen</span>
+                  <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {quizzes.length}
+                  </span>
+                </button>
 
-          {/* RIGHT COLUMN: Active Viewport Panel */}
-          <div className="lg:col-span-9">
-            <form onSubmit={handleSaveManualQuiz} className="space-y-6">
-              
-              {/* Form Content depending on activeQuestionIdx */}
-              {activeQuestionIdx === -1 ? (
-                /* QUIZ GENERAL DETAILS (⚙️ SETTINGS SLIDE) */
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4">
-                    <div>
-                      <span className="text-xs font-black text-indigo-500 uppercase tracking-widest block mb-1">ALGEMEEN ONTWERP</span>
-                      <h2 className="text-2xl font-black font-display text-slate-800 dark:text-white flex items-center gap-2">
-                        <span>⚙️ Quiz Instellingen & Thema</span>
-                      </h2>
-                    </div>
-                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500">
-                      Settings Slide
-                    </span>
-                  </div>
+                <button
+                  id="tab-quiz-create"
+                  type="button"
+                  onClick={() => {
+                    handleResetForm();
+                    setActiveTab("create");
+                  }}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer min-h-[44px] ${
+                    activeTab === "create"
+                      ? "bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 shadow-sm"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{editingQuizId ? "Quiz Bewerken" : "Nieuwe Quiz"}</span>
+                </button>
+              </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Titel *</label>
-                      <input
-                        type="text"
-                        required
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Bijv. De Grote Vakantie Quiz of Geschiedenis Quiz"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Omschrijving</label>
-                      <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Geef een korte omschrijving van je quiz"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition h-20 resize-none font-medium"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Quiz Afbeelding URL (Optioneel)</label>
-                      <input
-                        type="url"
-                        value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
-                        placeholder="https://voorbeeld.nl/plaatje.jpg"
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🛸 Achtergrond Thema Vragen</label>
-                        <select
-                          value={theme}
-                          onChange={(e) => setTheme(e.target.value as any)}
-                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
-                        >
-                          <option value="default">🌌 Standaard (Donker)</option>
-                          <option value="summer">🌞 Zomer (Strand vibes)</option>
-                          <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
-                          <option value="halloween">🎃 Halloween (Spooky)</option>
-                          <option value="space">🪐 Kosmisch (Sterren)</option>
-                          <option value="neon">⚡ Neon Retro (Synthwave)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎈 Achtergrond Thema Lobby</label>
-                        <select
-                          value={lobbyTheme}
-                          onChange={(e) => setLobbyTheme(e.target.value as any)}
-                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
-                        >
-                          <option value="default">🌌 Standaard (Donker)</option>
-                          <option value="summer">🌞 Zomer (Strand vibes)</option>
-                          <option value="winter">❄️ Winter (Sneeuw & Frost)</option>
-                          <option value="halloween">🎃 Halloween (Spooky)</option>
-                          <option value="space">🪐 Kosmisch (Sterren)</option>
-                          <option value="neon">⚡ Neon Retro (Synthwave)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
-                      <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🎵 Lobby Achtergrondmuziek</label>
-                      <select
-                        value={lobbyMusicUrl}
-                        onChange={(e) => setLobbyMusicUrl(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 focus:border-transparent outline-none transition font-medium cursor-pointer"
-                      >
-                        <option value="https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3">🎵 Soundtrack 1 (Mellow - Standaard)</option>
-                        <option value="https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3">🕹️ Soundtrack 2 (Retro / Arcade)</option>
-                        <option value="https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3">⚡ Soundtrack 3 (Upbeat / Energiek)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">Sla de quiz op nadat je alle vragen hebt ingevuld.</span>
+              {activeTab === "list" && quizzes.length > 0 && (
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="search-quiz-input"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Zoek een quiz..."
+                    className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder-slate-400 outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  {searchQuery && (
                     <button
-                      type="button"
-                      onClick={() => setActiveQuestionIdx(0)}
-                      className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-120 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
-                      Begin met Vragen <Play className="w-3 h-3 justify-center text-current inline fill-current" />
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* TAB: LIST */}
+            {activeTab === "list" && (
+              <div id="quiz-list-view">
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-3" />
+                    <p className="text-sm text-slate-500 font-medium">Jouw quizzen ophalen...</p>
+                  </div>
+                ) : filteredQuizzes.length === 0 ? (
+                  <div
+                    id="empty-quizzes-card"
+                    className="text-center py-16 px-6 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 max-w-lg mx-auto my-8"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-4">
+                      <Sparkles className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">
+                      {searchQuery ? "Geen quizzen gevonden" : "Nog geen quizzen aangemaakt"}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                      {searchQuery
+                        ? "Probeer een andere zoekterm om jouw quiz te vinden."
+                        : "Bouw je eerste interactieve quiz met afbeeldingen, geluksrad of puzzels en start een live sessie!"}
+                    </p>
+                    <button
+                      id="btn-create-first-quiz"
+                      type="button"
+                      onClick={() => {
+                        handleResetForm();
+                        setActiveTab("create");
+                      }}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition cursor-pointer min-h-[44px]"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{searchQuery ? "Nieuwe Quiz Maken" : "Eerste Quiz Aanmaken"}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredQuizzes.map((quiz) => {
+                      const { cleanTitle, isVerified } = parseQuizTitle(quiz.title || "");
+                      const quizThemeMeta = THEME_OPTIONS.find((t) => t.id === quiz.theme) || THEME_OPTIONS[0];
+
+                      return (
+                        <div
+                          key={quiz.id}
+                          id={`quiz-card-${quiz.id}`}
+                          className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-purple-200 dark:hover:border-purple-900/60 transition-all flex flex-col justify-between overflow-hidden"
+                        >
+                          <div>
+                            {/* Card Header Media */}
+                            {quiz.imageUrl ? (
+                              <div className="relative h-44 w-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800">
+                                <img
+                                  src={quiz.imageUrl}
+                                  alt={cleanTitle}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover group-hover:scale-103 transition duration-500"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/10 shadow-sm">
+                                    {quiz.questions?.length || 0} vragen
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="h-24 w-full bg-slate-100 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-purple-600 dark:text-purple-400 shadow-xs">
+                                    <quizThemeMeta.icon className="w-4 h-4" />
+                                  </div>
+                                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                                    {quizThemeMeta.label}
+                                  </span>
+                                </div>
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40">
+                                  {quiz.questions?.length || 0} vragen
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Card Content */}
+                            <div className="p-5">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug line-clamp-1 flex items-center gap-1.5">
+                                  <span>{cleanTitle}</span>
+                                  {isVerified && (
+                                    <span
+                                      className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-4 h-4 text-[9px] font-bold shrink-0 shadow-xs"
+                                      title="Geverifieerde Quiz"
+                                    >
+                                      <Check className="w-2.5 h-2.5" />
+                                    </span>
+                                  )}
+                                </h3>
+                              </div>
+
+                              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 min-h-[32px] mb-4">
+                                {quiz.description || "Geen beschrijving opgegeven."}
+                              </p>
+
+                              {/* Badges / Metadata */}
+                              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-[11px] text-slate-500">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-medium">
+                                  <quizThemeMeta.icon className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                  <span>{quizThemeMeta.label}</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Card Actions */}
+                          <div className="p-4 bg-slate-50/60 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2">
+                            <button
+                              id={`btn-host-quiz-${quiz.id}`}
+                              type="button"
+                              onClick={() => onHostGame(quiz)}
+                              className="flex-1 min-h-[44px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-98 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Host Quiz</span>
+                            </button>
+
+                            <button
+                              id={`btn-edit-quiz-${quiz.id}`}
+                              type="button"
+                              onClick={() => handleEditQuiz(quiz)}
+                              className="min-h-[44px] px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-purple-600 hover:border-purple-300 dark:hover:border-purple-800 font-bold text-xs transition cursor-pointer"
+                              title="Quiz Bewerken"
+                            >
+                              Bewerken
+                            </button>
+
+                            <button
+                              id={`btn-delete-quiz-${quiz.id}`}
+                              type="button"
+                              onClick={() => handleDeleteQuiz(quiz.id)}
+                              className="min-h-[44px] p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/60 transition cursor-pointer flex items-center justify-center"
+                              title="Verwijderen"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: CREATE / EDIT */}
+            {activeTab === "create" && (
+              <div id="quiz-builder-studio" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start pb-12">
+                {/* LEFT SIDEBAR: Slide Navigator */}
+                <div className="lg:col-span-4 xl:col-span-3 space-y-3 lg:sticky lg:top-24">
+                  <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-1.5">
+                        <Film className="w-4 h-4 text-purple-600" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                          Dia Navigator
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                        {questions.length + 1} dia's
+                      </span>
+                    </div>
+
+                    {/* Master Settings Slide (-1) */}
+                    <button
+                      id="slide-tab-settings"
+                      type="button"
+                      onClick={() => setActiveQuestionIdx(-1)}
+                      className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        activeQuestionIdx === -1
+                          ? "bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-500/20"
+                          : "bg-slate-50/70 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center text-sm font-bold shrink-0">
+                          <Settings className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
+                            {title.trim() || "Quiz Algemeen"}
+                          </span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 block truncate">
+                            Titel, cover & muziek
+                          </span>
+                        </div>
+                      </div>
+                      {activeQuestionIdx === -1 && (
+                        <div className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Questions Slides List */}
+                    <div className="space-y-2 max-h-[calc(100vh-22rem)] overflow-y-auto pr-1">
+                      {questions.map((q, idx) => {
+                        const isActive = activeQuestionIdx === idx;
+                        const typeMeta = getQuestionTypeMeta(q.questionType);
+
+                        return (
+                          <div
+                            key={idx}
+                            id={`slide-item-${idx}`}
+                            onClick={() => setActiveQuestionIdx(idx)}
+                            className={`group relative p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                              isActive
+                                ? "bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-600 ring-2 ring-purple-500/20"
+                                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <span className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-[11px] shrink-0">
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border ${typeMeta.color}`}>
+                                    <typeMeta.icon className="w-2.5 h-2.5" />
+                                    <span>{typeMeta.label}</span>
+                                  </span>
+                                  {q.imageUrl && (
+                                    <span className="text-[10px] text-slate-400" title="Bevat afbeelding">
+                                      <ImageIcon className="w-3 h-3" />
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block truncate">
+                                  {q.questionText.trim() || "Lege vraag..."}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Hover / Action bar */}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveQuestion(idx, "up");
+                                }}
+                                disabled={idx === 0}
+                                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-20 cursor-pointer"
+                                title="Omhoog verplaatsen"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveQuestion(idx, "down");
+                                }}
+                                disabled={idx === questions.length - 1}
+                                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-20 cursor-pointer"
+                                title="Omlaag verplaatsen"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDuplicateQuestion(idx);
+                                }}
+                                className="p-1 text-slate-400 hover:text-purple-600 cursor-pointer"
+                                title="Dupliceren"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                              {questions.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveQuestion(idx);
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-red-600 cursor-pointer"
+                                  title="Verwijderen"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Add Question Button */}
+                    <button
+                      id="btn-add-question"
+                      type="button"
+                      onClick={handleAddQuestion}
+                      className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-98 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Vraag Toevoegen</span>
                     </button>
                   </div>
                 </div>
-              ) : (
-                /* QUESTION CARD COMPONENT SLIDE EDIT VIEW */
-                (() => {
-                  const qIdx = activeQuestionIdx;
-                  const q = questions[qIdx];
-                  if (!q) return null;
 
-                  return (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-slate-800 shadow-sm space-y-6 relative">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800">
+                {/* RIGHT MAIN PANEL: Active Slide Editor */}
+                <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+                  {activeQuestionIdx === -1 ? (
+                    /* MASTER SETTINGS PANEL */
+                    <div id="panel-quiz-settings" className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-5 border-b border-slate-100 dark:border-slate-800">
                         <div>
-                          <span className="text-xs font-black text-indigo-500 uppercase tracking-widest block mb-1">
-                            Dia-Editor & Antwoorden
+                          <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider block mb-1">
+                            Algemene Instellingen
                           </span>
-                          <h2 className="text-2xl font-black font-display text-slate-800 dark:text-white flex items-center gap-2">
-                            <span>🎭 Dia {qIdx + 1} Bewerken</span>
+                          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                            Quiz Details & Sfeer
                           </h2>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveQuestionIdx(0)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                        >
+                          <span>Ga naar vraag #1</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-5">
+                        {/* Title Input */}
+                        <div>
+                          <label htmlFor="quiz-title-input" className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            Quiz Titel *
+                          </label>
+                          <input
+                            id="quiz-title-input"
+                            type="text"
+                            required
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            placeholder="Bijv. De Grote Vrienden Quiz of Film Trivia"
+                            className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-base font-bold transition"
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                          <label htmlFor="quiz-desc-input" className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            Korte Omschrijving
+                          </label>
+                          <textarea
+                            id="quiz-desc-input"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Waar gaat deze quiz over? Wie kan er meedoen?"
+                            className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-sm font-medium transition h-20 resize-none"
+                          />
+                        </div>
+
+                        {/* Cover Image Uploader (ImgBB) */}
+                        <div className="pt-2">
+                          <ImageUploader
+                            id="quiz-cover-uploader"
+                            label="Quiz Cover Afbeelding (Optioneel)"
+                            imageUrl={imageUrl}
+                            onImageChange={setImageUrl}
+                            placeholder="https://i.ibb.co/... of upload een coverfoto via de knop"
+                          />
+                        </div>
+
+                        {/* Themes Selection */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                              Achtergrond Vragen
+                            </label>
+                            <select
+                              id="select-quiz-theme"
+                              value={theme}
+                              onChange={(e) => setTheme(e.target.value as any)}
+                              className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-sm cursor-pointer"
+                            >
+                              {THEME_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                              Achtergrond Lobby
+                            </label>
+                            <select
+                              id="select-lobby-theme"
+                              value={lobbyTheme}
+                              onChange={(e) => setLobbyTheme(e.target.value as any)}
+                              className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-sm cursor-pointer"
+                            >
+                              {THEME_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Lobby Music Selector with Audio Preview */}
+                        <div className="pt-2">
+                          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            Lobby Achtergrondmuziek
+                          </label>
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                            <select
+                              id="select-lobby-music"
+                              value={lobbyMusicUrl}
+                              onChange={(e) => setLobbyMusicUrl(e.target.value)}
+                              className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-sm cursor-pointer"
+                            >
+                              {MUSIC_OPTIONS.map((m, idx) => (
+                                <option key={idx} value={m.url}>
+                                  {m.label} ({m.badge})
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              id="btn-preview-music"
+                              type="button"
+                              onClick={() => handleToggleMusicPreview(lobbyMusicUrl)}
+                              className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold text-xs hover:bg-purple-100 transition cursor-pointer shrink-0"
+                            >
+                              {playingMusicUrl === lobbyMusicUrl ? (
+                                <>
+                                  <Pause className="w-4 h-4 fill-current" />
+                                  <span>Stop Muziek</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="w-4 h-4 fill-current" />
+                                  <span>Luister Preview</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : currentQuestion ? (
+                    /* QUESTION EDITOR PANEL */
+                    <div id={`panel-question-editor-${activeQuestionIdx}`} className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+                      {/* Question Header & Quick Actions */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-sm">
+                            #{activeQuestionIdx + 1}
+                          </span>
+                          <div>
+                            <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider block">
+                              Vraag Editor
+                            </span>
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                              Vraag #{activeQuestionIdx + 1} Bewerken
+                            </h2>
+                          </div>
+                        </div>
+
                         <div className="flex items-center gap-2">
                           <button
+                            id={`btn-duplicate-question-${activeQuestionIdx}`}
                             type="button"
-                            onClick={() => handleDuplicateQuestion(qIdx)}
-                            className="text-xs bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center gap-1 cursor-pointer font-bold"
+                            onClick={() => handleDuplicateQuestion(activeQuestionIdx)}
+                            className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Copy className="w-3.5 h-3.5" /> Dupliceren
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Dupliceren</span>
                           </button>
                           {questions.length > 1 && (
                             <button
+                              id={`btn-delete-question-${activeQuestionIdx}`}
                               type="button"
-                              onClick={() => handleRemoveQuestion(qIdx)}
-                              className="text-xs bg-red-50/50 dark:bg-red-950/20 hover:bg-red-50 text-red-500 px-3 py-2 rounded-lg border border-red-200 dark:border-red-900/40 transition flex items-center gap-1 cursor-pointer font-bold"
+                              onClick={() => handleRemoveQuestion(activeQuestionIdx)}
+                              className="min-h-[44px] px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-950/20 text-red-600 dark:text-red-400 font-bold text-xs hover:bg-red-50 transition flex items-center gap-1.5 cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" /> Verwijderen
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Verwijderen</span>
                             </button>
                           )}
                         </div>
                       </div>
 
-                      {/* Question Text */}
+                      {/* Question Text Field */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Vraagstelling *</label>
+                        <label htmlFor={`question-text-input-${activeQuestionIdx}`} className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                          Vraagtekst *
+                        </label>
                         <input
+                          id={`question-text-input-${activeQuestionIdx}`}
                           type="text"
                           required
-                          value={q.questionText}
-                          onChange={(e) => handleQuestionChange(qIdx, "questionText", e.target.value)}
-                          placeholder="Type hier je vraag..."
-                          className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition font-extrabold text-base focus:border-transparent placeholder-slate-300 dark:placeholder-slate-700"
+                          value={currentQuestion.questionText}
+                          onChange={(e) => handleQuestionChange(activeQuestionIdx, "questionText", e.target.value)}
+                          placeholder="Bijv. Wat is de hoofdstad van Frankrijk?"
+                          className="w-full px-4 py-3.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none text-base font-bold transition placeholder-slate-400"
                         />
                       </div>
 
-                      {/* Question Image URL & Interactive Thumbnail Preview */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">Vraag Afbeelding URL (Optioneel)</label>
-                          <input
-                            type="url"
-                            value={q.imageUrl || ""}
-                            onChange={(e) => handleQuestionChange(qIdx, "imageUrl", e.target.value)}
-                            placeholder="https://voorbeeld.nl/plaatje.jpg"
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition text-sm font-medium"
-                          />
-                        </div>
-                        <div className="md:col-span-1 flex flex-col justify-end">
-                          {q.imageUrl ? (
-                            <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 h-[48px] flex items-center px-3 gap-2">
-                              <img 
-                                src={q.imageUrl} 
-                                alt="Slide preview" 
-                                referrerPolicy="no-referrer"
-                                className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-slate-800 shrink-0" 
-                                onError={(e) => { e.currentTarget.style.display = "none"; }}
-                              />
-                              <div className="min-w-0 flex-1">
-                                <span className="text-[10px] text-emerald-500 font-extrabold block">Geladen ✓</span>
-                                <span className="text-[8px] text-slate-400 dark:text-slate-500 truncate block">Mediakaart</span>
-                              </div>
-                              <button 
-                                type="button" 
-                                onClick={() => handleQuestionChange(qIdx, "imageUrl", "")} 
-                                className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer"
-                              >
-                                Wis
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800/80 h-[48px] flex items-center justify-center text-xs text-slate-400">
-                              Geen media geüpload
-                            </div>
-                          )}
-                        </div>
+                      {/* Question Image Upload (ImgBB) */}
+                      <div>
+                        <ImageUploader
+                          id={`question-image-uploader-${activeQuestionIdx}`}
+                          label="Vraag Afbeelding (Optioneel)"
+                          imageUrl={currentQuestion.imageUrl || ""}
+                          onImageChange={(url) => handleQuestionChange(activeQuestionIdx, "imageUrl", url)}
+                          placeholder="https://i.ibb.co/... of klik op Foto Uploaden (ImgBB)"
+                        />
                       </div>
 
-                      {/* Question Configuration Settings Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Parameters Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">⏱️ Antwoordtijd (Sec)</label>
+                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            <Timer className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Antwoordtijd</span>
+                          </label>
                           <select
-                            value={q.timeLimit}
-                            onChange={(e) => handleQuestionChange(qIdx, "timeLimit", e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                            id={`select-timelimit-${activeQuestionIdx}`}
+                            value={currentQuestion.timeLimit}
+                            onChange={(e) => handleQuestionChange(activeQuestionIdx, "timeLimit", e.target.value)}
+                            className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                           >
-                            <option value={10}>10 seconden</option>
-                            <option value={20}>20 seconden</option>
-                            <option value={30}>30 seconden</option>
-                            <option value={60}>60 seconden</option>
+                            <option value={10}>10 seconden (Snel)</option>
+                            <option value={20}>20 seconden (Standaard)</option>
+                            <option value={30}>30 seconden (Rustig)</option>
+                            <option value={60}>60 seconden (Denktijd)</option>
                           </select>
                         </div>
+
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🏆 Punten Waarde</label>
+                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            <Trophy className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Puntenwaarde</span>
+                          </label>
                           <select
-                            value={q.points}
-                            onChange={(e) => handleQuestionChange(qIdx, "points", e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                            id={`select-points-${activeQuestionIdx}`}
+                            value={currentQuestion.points}
+                            onChange={(e) => handleQuestionChange(activeQuestionIdx, "points", e.target.value)}
+                            className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                           >
-                            <option value={500}>500 (Makkelijk)</option>
-                            <option value={1000}>1000 (Standaard)</option>
-                            <option value={2000}>2000 (VIP / Bonus!)</option>
+                            <option value={500}>500 pt (Basis)</option>
+                            <option value={1000}>1000 pt (Standaard)</option>
+                            <option value={2000}>2000 pt (Dubbele Bonus!)</option>
                           </select>
                         </div>
+
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-slate-400 mb-2">🚀 Vraag Speltype</label>
+                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                            <Gamepad2 className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Type Vraag</span>
+                          </label>
                           <select
-                            value={q.questionType || "multiple_choice"}
-                            onChange={(e) => handleQuestionChange(qIdx, "questionType", e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-950 text-slate-900 dark:text-white cursor-pointer font-bold text-sm"
+                            id={`select-type-${activeQuestionIdx}`}
+                            value={currentQuestion.questionType || "multiple_choice"}
+                            onChange={(e) => handleQuestionChange(activeQuestionIdx, "questionType", e.target.value)}
+                            className="w-full px-4 py-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-bold text-sm outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                           >
                             <option value="multiple_choice">Meerkeuze (2-6 opties)</option>
                             <option value="true_false">Waar of Niet Waar</option>
-                            <option value="wheel_spin">🎡 Geluksrad gokronde</option>
-                            <option value="puzzle">🧩 Sorteer puzzle volgorde</option>
-                            <option value="slider">🎚️ Schuifbalk getallenschaal</option>
+                            <option value="wheel_spin">Geluksrad gokronde</option>
+                            <option value="puzzle">Sorteer puzzel volgorde</option>
+                            <option value="slider">Schuifbalk getallenschaal</option>
                           </select>
                         </div>
                       </div>
 
-                      {/* Question Options/Answers Block */}
-                      <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <div className="flex justify-between items-center">
-                          <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 font-display">
-                            {q.questionType === "wheel_spin" ? (
-                              <span>🎡 Rad-sectoren uitkomsten <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Zelf in te vullen)</span></span>
-                            ) : q.questionType === "puzzle" ? (
-                              <span>🧩 Sorteer Elementen in de CORREKTE volgorde <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Onder elkaar invoeren)</span></span>
-                            ) : q.questionType === "slider" ? (
-                              <span>🎚️ Bepaal het antwoord & schaalbereik</span>
-                            ) : (
-                              <span>📝 Antwoordopties <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Vink de juiste antwoorden aan)</span></span>
-                            )}
+                      {/* Answers / Options Module */}
+                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                            {currentQuestion.questionType === "wheel_spin"
+                              ? "Rad Sectoren"
+                              : currentQuestion.questionType === "puzzle"
+                              ? "Puzzel Volgorde (Van boven naar beneden)"
+                              : currentQuestion.questionType === "slider"
+                              ? "Schaal & Doelwaarde"
+                              : "Antwoordopties (Vink het juiste antwoord aan)"}
                           </label>
-                          
-                          {q.questionType !== "true_false" && q.questionType !== "slider" && q.options.length < 6 && (
-                            <button
-                              type="button"
-                              onClick={() => handleAddOptionToQuestion(qIdx)}
-                              className="text-xs text-indigo-500 hover:text-indigo-650 font-black flex items-center gap-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/20 px-2.5 py-1.5 rounded-lg transition"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Antwoord Toevoegen ({q.options.length}/6)
-                            </button>
-                          )}
+
+                          {currentQuestion.questionType !== "true_false" &&
+                            currentQuestion.questionType !== "slider" &&
+                            currentQuestion.options.length < 6 && (
+                              <button
+                                id={`btn-add-option-${activeQuestionIdx}`}
+                                type="button"
+                                onClick={() => handleAddOptionToQuestion(activeQuestionIdx)}
+                                className="min-h-[36px] flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Optie toevoegen ({currentQuestion.options.length}/6)</span>
+                              </button>
+                            )}
                         </div>
 
-                        {/* RENDER SPECIFIC OPTION EDITOR MODULES */}
-                        {q.questionType === "slider" ? (
-                          <div className="bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/80 space-y-5">
-                            <span className="block text-xs font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest text-center border-b border-indigo-100 dark:border-indigo-950/40 pb-2">
-                              ⚙️ Pas Schaalbereik & Correct Getal Aan
-                            </span>
-                            
+                        {/* SLIDER MODULE */}
+                        {currentQuestion.questionType === "slider" ? (
+                          <div className="bg-slate-50 dark:bg-slate-950/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div className="space-y-1">
-                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Startwaarde (Min)</label>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                  Minimale Waarde
+                                </label>
                                 <input
+                                  id="slider-min-input"
                                   type="number"
                                   step="any"
-                                  value={q.sliderMin ?? 1}
+                                  value={currentQuestion.sliderMin ?? 1}
                                   onChange={(e) => {
                                     const val = Number(e.target.value);
                                     const updated = [...questions];
-                                    updated[qIdx].sliderMin = val;
-                                    if ((updated[qIdx].correctOptionIndex ?? 2) < val) {
-                                      updated[qIdx].correctOptionIndex = val;
-                                    }
+                                    updated[activeQuestionIdx].sliderMin = val;
                                     setQuestions(updated);
                                   }}
-                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold"
                                 />
                               </div>
-                              <div className="space-y-1">
-                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Eindwaarde (Max)</label>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                  Maximale Waarde
+                                </label>
                                 <input
+                                  id="slider-max-input"
                                   type="number"
                                   step="any"
-                                  value={q.sliderMax ?? (q.options?.length || 5)}
+                                  value={currentQuestion.sliderMax ?? 10}
                                   onChange={(e) => {
                                     const val = Number(e.target.value);
                                     const updated = [...questions];
-                                    updated[qIdx].sliderMax = val;
-                                    if ((updated[qIdx].correctOptionIndex ?? 2) > val) {
-                                      updated[qIdx].correctOptionIndex = val;
-                                    }
+                                    updated[activeQuestionIdx].sliderMax = val;
                                     setQuestions(updated);
                                   }}
-                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold"
                                 />
                               </div>
-                              <div className="space-y-1">
-                                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stapgrootte (Step)</label>
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                  Stapgrootte
+                                </label>
                                 <input
+                                  id="slider-step-input"
                                   type="number"
-                                  min="0.001"
                                   step="any"
-                                  value={q.sliderStep ?? 1}
+                                  min="0.1"
+                                  value={currentQuestion.sliderStep ?? 1}
                                   onChange={(e) => {
-                                    const val = Math.max(0.001, Number(e.target.value));
+                                    const val = Math.max(0.1, Number(e.target.value));
                                     const updated = [...questions];
-                                    updated[qIdx].sliderStep = val;
+                                    updated[activeQuestionIdx].sliderStep = val;
                                     setQuestions(updated);
                                   }}
-                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-bold shadow-xs"
+                                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold"
                                 />
                               </div>
                             </div>
 
-                            <div className="bg-white dark:bg-slate-900/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
-                              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center">
-                                Selecteer de juiste waarde op deze schaal door de balk te schuiven of de waarde direct te typen:
-                              </p>
-
-                              <div className="space-y-2 py-1">
-                                <input
-                                  type="range"
-                                  min={q.sliderMin ?? 1}
-                                  max={q.sliderMax ?? (q.options?.length || 5)}
-                                  step={q.sliderStep ?? 1}
-                                  value={q.correctOptionIndex ?? 3}
-                                  onChange={(e) => {
-                                    handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
-                                  }}
-                                  className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                />
-                                <div className="flex justify-between text-[10px] font-mono text-slate-400 font-black px-1">
-                                  <span>Min: {(q.sliderMin ?? 1).toLocaleString("nl-NL")}</span>
-                                  <span>Max: {(q.sliderMax ?? (q.options?.length || 5)).toLocaleString("nl-NL")}</span>
-                                </div>
+                            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 space-y-2">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400">
+                                <span>Correct antwoord op de schuifbalk:</span>
+                                <span className="text-purple-600 dark:text-purple-400 font-extrabold text-sm">
+                                  {currentQuestion.correctOptionIndex ?? 5}
+                                </span>
                               </div>
-
-                              <div className="flex flex-col items-center justify-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/40">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider">Correct Getal:</span>
-                                  <input
-                                    type="number"
-                                    min={q.sliderMin ?? 1}
-                                    max={q.sliderMax ?? (q.options?.length || 5)}
-                                    step="any"
-                                    value={q.correctOptionIndex ?? 3}
-                                    onChange={(e) => {
-                                      handleQuestionChange(qIdx, "correctOptionIndex", Number(e.target.value));
-                                    }}
-                                    className="w-36 px-3 py-1.5 border border-indigo-200 dark:border-indigo-900 text-center font-extrabold text-sm bg-indigo-50/20 text-indigo-600 dark:text-indigo-400 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-xs"
-                                  />
-                                </div>
-                                
-                                {(() => {
-                                  const minVal = q.sliderMin ?? 1;
-                                  const maxVal = q.sliderMax ?? (q.options?.length || 5);
-                                  const stepVal = q.sliderStep ?? 1;
-                                  const rangeCount = Math.floor((maxVal - minVal) / stepVal) + 1;
-                                  
-                                  if (rangeCount > 0 && rangeCount <= 12) {
-                                    const dots = [];
-                                    for (let v = minVal; v <= maxVal; v += stepVal) {
-                                      dots.push(parseFloat(v.toFixed(4)));
-                                    }
-                                    return (
-                                      <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2 max-w-sm">
-                                        {dots.map((val) => {
-                                          const isSelected = q.correctOptionIndex === val;
-                                          return (
-                                            <button
-                                              type="button"
-                                              key={val}
-                                              onClick={() => {
-                                                handleQuestionChange(qIdx, "correctOptionIndex", val);
-                                              }}
-                                              className={`px-2.5 py-1 rounded-lg font-bold text-[10px] border transition-all cursor-pointer ${
-                                                isSelected
-                                                  ? "bg-indigo-600 border-indigo-700 text-white shadow-xs scale-105"
-                                                  : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
-                                              }`}
-                                            >
-                                              {val}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
+                              <input
+                                id="slider-range-preview"
+                                type="range"
+                                min={currentQuestion.sliderMin ?? 1}
+                                max={currentQuestion.sliderMax ?? 10}
+                                step={currentQuestion.sliderStep ?? 1}
+                                value={currentQuestion.correctOptionIndex ?? 5}
+                                onChange={(e) => handleQuestionChange(activeQuestionIdx, "correctOptionIndex", Number(e.target.value))}
+                                className="w-full accent-purple-600 cursor-pointer"
+                              />
                             </div>
                           </div>
-                        ) : q.questionType === "puzzle" ? (
-                          <div className="space-y-3">
-                            <p className="text-xs text-indigo-500 font-bold mb-2 p-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30">
-                              ⚡ Schrijf de antwoorden in de CORRECTE volgorde van boven naar beneden. Spelers moeten ze op hun schermen op de juiste volgorde slepen.
-                            </p>
-                            <div className="grid md:grid-cols-2 gap-3">
-                              {q.options.map((opt, oIdx) => {
-                                const optStyles = [
-                                  { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "Rood" },
-                                  { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "Blauw" },
-                                  { border: "border-yellow-200 dark:border-yellow-900/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "Geel" },
-                                  { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "Groen" },
-                                  { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "Paars" },
-                                  { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "Oranje" },
-                                ];
-                                const styleInfo = optStyles[oIdx % optStyles.length];
-                                
-                                return (
-                                  <div key={oIdx} className="flex items-center gap-2.5 bg-slate-50/55 dark:bg-slate-900/30 p-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 relative group">
-                                    <span className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold font-mono text-xs flex items-center justify-center border border-indigo-100 dark:border-indigo-900/40 shrink-0 select-none">
-                                      #{oIdx + 1}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      required
-                                      value={opt}
-                                      onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
-                                      placeholder={`Element of kleur ${oIdx + 1}`}
-                                      className={`flex-1 px-3 py-2 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition text-sm font-medium`}
-                                    />
-                                    {q.options.length > 2 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
-                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-55 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
-                                        title="Item verwijderen"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
+                        ) : currentQuestion.questionType === "true_false" ? (
+                          /* TRUE / FALSE MODULE */
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {currentQuestion.options.map((opt, oIdx) => {
+                              const isCorrect = (currentQuestion.correctOptionIndices || [currentQuestion.correctOptionIndex ?? 0]).includes(oIdx);
+                              const isTrue = oIdx === 0;
+
+                              return (
+                                <button
+                                  key={oIdx}
+                                  id={`btn-tf-option-${oIdx}`}
+                                  type="button"
+                                  onClick={() => {
+                                    handleQuestionChange(activeQuestionIdx, "correctOptionIndices", [oIdx]);
+                                    handleQuestionChange(activeQuestionIdx, "correctOptionIndex", oIdx);
+                                  }}
+                                  className={`p-6 rounded-2xl border-2 transition-all cursor-pointer text-left flex items-center justify-between min-h-[72px] ${
+                                    isCorrect
+                                      ? isTrue
+                                        ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-900 dark:text-emerald-100 shadow-sm"
+                                        : "bg-red-50 dark:bg-red-950/40 border-red-500 text-red-900 dark:text-red-100 shadow-sm"
+                                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                      {isTrue ? (
+                                        <ThumbsUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                      ) : (
+                                        <ThumbsDown className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <span className="text-base font-black block">{opt}</span>
+                                      <span className="text-xs font-semibold opacity-70 flex items-center gap-1">
+                                        {isCorrect ? (
+                                          <>
+                                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                            <span>Correct antwoord</span>
+                                          </>
+                                        ) : (
+                                          <span>Klik om als correct in te stellen</span>
+                                        )}
+                                      </span>
+                                    </div>
                                   </div>
-                                );
-                              })}
+                                  {isCorrect && (
+                                    <div className={`w-7 h-7 rounded-full text-white flex items-center justify-center font-bold ${isTrue ? "bg-emerald-500" : "bg-red-500"}`}>
+                                      <Check className="w-4 h-4" />
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : currentQuestion.questionType === "puzzle" ? (
+                          /* PUZZLE MODULE */
+                          <div className="space-y-2.5">
+                            <p className="text-xs text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 p-3 rounded-xl border border-purple-200 dark:border-purple-800/60 font-semibold flex items-start gap-2">
+                              <Lightbulb className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+                              <span>Typ de items hieronder in de <strong>juiste volgorde</strong>. Spelers moeten ze live op hun telefoon in deze exacte volgorde slepen!</span>
+                            </p>
+                            <div className="space-y-2">
+                              {currentQuestion.options.map((opt, oIdx) => (
+                                <div key={oIdx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                                  <span className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs shrink-0">
+                                    #{oIdx + 1}
+                                  </span>
+                                  <input
+                                    id={`puzzle-opt-${oIdx}`}
+                                    type="text"
+                                    required
+                                    value={opt}
+                                    onChange={(e) => handleOptionChange(activeQuestionIdx, oIdx, e.target.value)}
+                                    placeholder={`Stap #${oIdx + 1}`}
+                                    className="flex-1 bg-white dark:bg-slate-900 px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-semibold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
+                                  />
+                                  {currentQuestion.options.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveOptionFromQuestion(activeQuestionIdx, oIdx)}
+                                      className="text-slate-400 hover:text-red-500 p-1.5 transition cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ) : (
-                          <div className="grid md:grid-cols-2 gap-3 grid-cols-1">
-                            {q.options.map((opt, oIdx) => {
-                              const optStyles = [
-                                { border: "border-red-200 dark:border-red-900/50 bg-red-50/15 dark:bg-red-950/20", label: "A (Rood)" },
-                                { border: "border-blue-200 dark:border-blue-900/50 bg-blue-50/15 dark:bg-blue-950/20", label: "B (Blauw)" },
-                                { border: "border-yellow-200 dark:border-yellow-900/40 bg-yellow-50/15 dark:bg-yellow-950/20", label: "C (Geel)" },
-                                { border: "border-green-200 dark:border-green-900/50 bg-green-50/15 dark:bg-green-950/20", label: "D (Groen)" },
-                                { border: "border-purple-200 dark:border-purple-900/50 bg-purple-50/15 dark:bg-purple-950/20", label: "E (Paars)" },
-                                { border: "border-orange-200 dark:border-orange-900/50 bg-orange-50/15 dark:bg-orange-950/20", label: "F (Oranje)" },
+                          /* MULTIPLE CHOICE & WHEEL MODULE */
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {currentQuestion.options.map((opt, oIdx) => {
+                              const badgeLetters = ["A", "B", "C", "D", "E", "F"];
+                              const colors = [
+                                "border-red-200 dark:border-red-900/60 bg-red-50/20 dark:bg-red-950/20 text-red-600",
+                                "border-blue-200 dark:border-blue-900/60 bg-blue-50/20 dark:bg-blue-950/20 text-blue-600",
+                                "border-amber-200 dark:border-amber-900/60 bg-amber-50/20 dark:bg-amber-950/20 text-amber-600",
+                                "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-600",
+                                "border-purple-200 dark:border-purple-900/60 bg-purple-50/20 dark:bg-purple-950/20 text-purple-600",
+                                "border-orange-200 dark:border-orange-900/60 bg-orange-50/20 dark:bg-orange-950/20 text-orange-600",
                               ];
-                              const styleInfo = optStyles[oIdx % optStyles.length];
-                              const currentCorrects = q.correctOptionIndices || [q.correctOptionIndex ?? 0];
+                              const colorStyle = colors[oIdx % colors.length];
+
+                              const currentCorrects = currentQuestion.correctOptionIndices || [currentQuestion.correctOptionIndex ?? 0];
                               const isCorrect = currentCorrects.includes(oIdx);
 
-                              const handleCheckboxToggle = () => {
+                              const toggleOptionCorrect = () => {
                                 let newCorrects = [...currentCorrects];
                                 if (isCorrect) {
-                                  newCorrects = newCorrects.filter((val) => val !== oIdx);
+                                  newCorrects = newCorrects.filter((v) => v !== oIdx);
                                 } else {
                                   newCorrects.push(oIdx);
                                 }
-                                handleQuestionChange(qIdx, "correctOptionIndices", newCorrects);
+                                handleQuestionChange(activeQuestionIdx, "correctOptionIndices", newCorrects);
                               };
 
                               return (
-                                <div key={oIdx} className="flex items-center gap-2 group">
-                                  {q.questionType !== "wheel_spin" && (
-                                    <input
-                                      type="checkbox"
-                                      checked={isCorrect}
-                                      onChange={handleCheckboxToggle}
-                                      className="w-5 h-5 rounded border-gray-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0 accent-indigo-500"
-                                    />
+                                <div
+                                  key={oIdx}
+                                  id={`option-card-${oIdx}`}
+                                  className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${
+                                    isCorrect
+                                      ? "ring-2 ring-emerald-500/50 bg-emerald-50/30 dark:bg-emerald-950/20 border-emerald-400"
+                                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                                  }`}
+                                >
+                                  {currentQuestion.questionType !== "wheel_spin" && (
+                                    <button
+                                      id={`btn-correct-toggle-${oIdx}`}
+                                      type="button"
+                                      onClick={toggleOptionCorrect}
+                                      className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs transition cursor-pointer shrink-0 ${
+                                        isCorrect
+                                          ? "bg-emerald-500 text-white shadow-xs"
+                                          : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600"
+                                      }`}
+                                      title={isCorrect ? "Correct antwoord" : "Markeer als correct"}
+                                    >
+                                      {isCorrect ? <Check className="w-5 h-5" /> : badgeLetters[oIdx]}
+                                    </button>
                                   )}
-                                  <div className="flex-1 flex gap-2 relative items-center">
-                                    <input
-                                      type="text"
-                                      required
-                                      disabled={q.questionType === "true_false"}
-                                      value={opt}
-                                      onChange={(e) => handleOptionChange(qIdx, oIdx, e.target.value)}
-                                      placeholder={q.questionType === "wheel_spin" ? `Sector ${oIdx + 1} tekst` : `Antwoordoptie ${styleInfo.label}`}
-                                      className={`flex-1 px-3 py-2.5 border ${styleInfo.border} text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition disabled:opacity-85 disabled:cursor-not-allowed text-sm font-semibold`}
-                                    />
-                                    {q.questionType !== "true_false" && q.options.length > 2 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveOptionFromQuestion(qIdx, oIdx)}
-                                        className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition shrink-0 cursor-pointer"
-                                        title="Optie verwijderen"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                  </div>
+
+                                  <input
+                                    id={`input-opt-${oIdx}`}
+                                    type="text"
+                                    required
+                                    value={opt}
+                                    onChange={(e) => handleOptionChange(activeQuestionIdx, oIdx, e.target.value)}
+                                    placeholder={
+                                      currentQuestion.questionType === "wheel_spin"
+                                        ? `Sector ${oIdx + 1} tekst`
+                                        : `Antwoord ${badgeLetters[oIdx]}`
+                                    }
+                                    className="flex-1 bg-transparent px-3 py-2 text-sm font-semibold text-slate-900 dark:text-white outline-none"
+                                  />
+
+                                  {currentQuestion.options.length > 2 && (
+                                    <button
+                                      id={`btn-remove-opt-${oIdx}`}
+                                      type="button"
+                                      onClick={() => handleRemoveOptionFromQuestion(activeQuestionIdx, oIdx)}
+                                      className="text-slate-300 hover:text-red-500 p-1.5 transition cursor-pointer"
+                                      title="Optie verwijderen"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
                         )}
-                        
-                        {/* Feedback informational bars */}
-                        {q.questionType === "wheel_spin" ? (
-                          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1 font-medium bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200/40">
-                            🎰 Spelers draaien aan dit rad voor punten! Tip: Gebruik getallen (+500, -250), "Verdubbelen", of "Bankroet" voor de leukste gok-ronde.
-                          </p>
-                        ) : q.questionType === "puzzle" ? (
-                          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 font-medium bg-purple-50/50 dark:bg-purple-950/20 p-2.5 rounded-lg border border-purple-200/40">
-                            🧩 Sorteervragen (puzzels) vereisen dat spelers de opties in exact deze volgorde schikken. Ideaal voor chronologie of procesvolgordes!
-                          </p>
-                        ) : q.questionType === "slider" ? (
-                          <p className="text-xs text-teal-600 dark:text-teal-400 mt-1 font-medium bg-teal-50/50 dark:bg-teal-950/20 p-2.5 rounded-lg border border-teal-200/40">
-                            🎚️ Schuifbalkvragen dagen spelers uit om de waarde te benaderen. De score is gebaseerd op de nabijheid van het getal!
-                          </p>
-                        ) : (
-                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-medium font-display">
-                            Vink de correcte antwoordopties hierboven aan. Selecteer meerdere om een MULTI-keuze vraag te maken!
-                          </p>
-                        )}
                       </div>
 
-                      {/* Viewport Slide-Deck Navigation Row */}
-                      <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      {/* Question Navigation Bar */}
+                      <div className="pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
                         <button
+                          id="btn-prev-question"
                           type="button"
-                          onClick={() => setActiveQuestionIdx(qIdx - 1)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition cursor-pointer"
+                          onClick={() => setActiveQuestionIdx(activeQuestionIdx - 1)}
+                          className="min-h-[44px] flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                         >
-                          <ArrowLeft className="w-3.5 h-3.5" /> Vorige Dia
+                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <span>{activeQuestionIdx === 0 ? "Quiz Details" : "Vorige Vraag"}</span>
                         </button>
-                        
-                        {qIdx < questions.length - 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => setActiveQuestionIdx(qIdx + 1)}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition cursor-pointer"
-                          >
-                            Volgende Dia <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={handleAddQuestion}
-                            className="inline-flex items-center gap-1 bg-indigo-50 hover:bg-slate-100 text-indigo-600 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer"
-                          >
-                            + Extra Dia Toevoegen
-                          </button>
-                        )}
+
+                        <div className="flex items-center gap-2">
+                          {activeQuestionIdx < questions.length - 1 ? (
+                            <button
+                              id="btn-next-question"
+                              type="button"
+                              onClick={() => setActiveQuestionIdx(activeQuestionIdx + 1)}
+                              className="min-h-[44px] flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                            >
+                              <span>Volgende Vraag</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              id="btn-add-extra-question"
+                              type="button"
+                              onClick={handleAddQuestion}
+                              className="min-h-[44px] flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold text-xs hover:bg-purple-100 transition cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Extra Vraag Toevoegen</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  );
-                })()
-              )}
+                  ) : null}
 
-              {/* SAVING TRIGGER BAR */}
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer text-base uppercase tracking-wider"
-              >
-                {editingQuizId ? "💾 Wijzigingen Opslaan" : "💾 Sla Quiz Op"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
-  )}
-</div>
+                  {/* Primary Save Action Button */}
+                  <div className="pt-2">
+                    <button
+                      id="btn-save-quiz-bottom"
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveManualQuiz()}
+                      className="w-full min-h-[52px] bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold text-sm uppercase tracking-wider py-4 px-6 rounded-2xl shadow-md shadow-purple-600/20 disabled:opacity-50 transition cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Quiz wordt opgeslagen...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{editingQuizId ? "Wijzigingen Aan Quiz Opslaan" : "Quiz Voltooien & Opslaan"}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+    </div>
   );
 }

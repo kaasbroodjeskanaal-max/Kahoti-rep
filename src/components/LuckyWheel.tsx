@@ -195,12 +195,12 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
             disabled={disabled}
             className="px-8 py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-900 font-extrabold text-lg uppercase tracking-wider rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer border-b-[6px] border-amber-700 font-display flex items-center justify-center gap-2 mx-auto"
           >
-            <Sparkles className="w-5 h-5 animate-pulse" /> Spin het Rad! 🎰
+            <Sparkles className="w-5 h-5 animate-pulse" /> Spin het Rad!
           </button>
         ) : spinning ? (
           <div className="inline-flex flex-col items-center">
             <span className="text-sm text-slate-400 dark:text-slate-300 font-bold animate-pulse flex items-center gap-1">
-              ✨ Het rad draait... Waag je gokje! ✨
+              Het rad draait... Waag je gokje!
             </span>
             <div className="w-48 bg-slate-200 dark:bg-slate-800 h-1 rounded-full mt-2 overflow-hidden">
               <div className="bg-amber-400 h-full animate-marquee duration-1000 origin-left w-1/2 rounded-full" style={{ animation: "shimmer 1.5s infinite" }} />
@@ -215,8 +215,10 @@ export const LuckyWheel: React.FC<LuckyWheelProps> = ({
             <span className="text-xs uppercase font-black tracking-widest text-amber-500 dark:text-amber-500">
               Jouw gokuitkomst:
             </span>
-            <span className="text-xl font-black font-display mt-0.5 animate-bounce">
-              🎉 {result} 🎉
+            <span className="text-xl font-black font-display mt-0.5 animate-bounce flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <span>{result}</span>
+              <Sparkles className="w-5 h-5 text-amber-500" />
             </span>
           </motion.div>
         ) : null}

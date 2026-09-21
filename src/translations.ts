@@ -37,7 +37,7 @@ export const translations = {
     darkMode: "Donkere modus",
     
     // Threat / Blocked Screen
-    shieldActive: "🚨 DDoS & Spam Shield Actief",
+    shieldActive: "DDoS & Spam Shield Actief",
     rateLimitExceeded: "Verzoek Snelheidslimiet Overschreden",
     blockedReason: "Het systeem heeft een ongebruikelijk hoge activiteit gedetecteerd vanaf deze browser. De client is tijdelijk geblokkeerd om serveroverbelasting en onnodig egress-verbruik te voorkomen.",
     cooldownPeriod: "Tijdelijke Afkoelperiode Actief",
@@ -55,7 +55,7 @@ export const translations = {
     nickname: "Je Bijnaam",
     chooseAvatar: "Kies je Avatar",
     randomAvatar: "Willekeurig",
-    confirmJoin: "Spel binnengaan ✨",
+    confirmJoin: "Spel binnengaan",
     back: "Terug",
     invalidCode: "Ongeldige code. Gebruik een code van 1 tot 8 cijfers.",
     lobbyNotFound: "Lobby niet gevonden of reeds afgelopen.",
@@ -75,13 +75,13 @@ export const translations = {
     questionType: "Vraagtype",
     multipleChoice: "Meerkeuze",
     trueFalse: "Waar / Niet Waar",
-    slider: "🎚️ Schuifbalk / Schaal",
-    scaleSetting: "⚙️ Pas Schaalbereik Aan (2 t/m 10):",
+    slider: "Schuifbalk / Schaal",
+    scaleSetting: "Pas Schaalbereik Aan (2 t/m 10):",
     sliderInstruction: "Kies het correcte getal op de schaal van 1 tot {max} door er op te klikken:",
     confirmScale: "1 t/m {val}",
     
     // Components - GamePlayer
-    sliderConfirm: "Bevestig Getal ({val}) ⭐",
+    sliderConfirm: "Bevestig Getal ({val})",
     confirmAnswer: "Antwoord Bevestigen",
     confirmAnswerLocked: "Je antwoord is opgeslagen!",
     waitingForNext: "Wachten op de host voor de volgende ronde...",
@@ -147,7 +147,7 @@ export const translations = {
     darkMode: "Dark Mode",
     
     // Threat / Blocked Screen
-    shieldActive: "🚨 DDoS & Spam Shield Active",
+    shieldActive: "DDoS & Spam Shield Active",
     rateLimitExceeded: "Request Rate Limit Exceeded",
     blockedReason: "The system detected unusually high activity from this browser. The client has been temporarily blocked to prevent server overload and excess egress usage.",
     cooldownPeriod: "Temporary Cooldown Period Active",
@@ -165,7 +165,7 @@ export const translations = {
     nickname: "Your Nickname",
     chooseAvatar: "Choose your Avatar",
     randomAvatar: "Randomize",
-    confirmJoin: "Enter Game ✨",
+    confirmJoin: "Enter Game",
     back: "Back",
     invalidCode: "Invalid code. Please use a code with 1 to 8 digits.",
     lobbyNotFound: "Lobby not found or already ended.",
@@ -185,13 +185,13 @@ export const translations = {
     questionType: "Question Type",
     multipleChoice: "Multiple Choice",
     trueFalse: "True / False",
-    slider: "🎚️ Slider / Scale",
-    scaleSetting: "⚙️ Adjust Scale Range (2 to 10):",
+    slider: "Slider / Scale",
+    scaleSetting: "Adjust Scale Range (2 to 10):",
     sliderInstruction: "Choose the correct number on the scale from 1 to {max} by clicking it:",
     confirmScale: "1 to {val}",
     
     // Components - GamePlayer
-    sliderConfirm: "Confirm Number ({val}) ⭐",
+    sliderConfirm: "Confirm Number ({val})",
     confirmAnswer: "Confirm Answer",
     confirmAnswerLocked: "Your answer has been registered!",
     waitingForNext: "Waiting for the host to start the next round...",

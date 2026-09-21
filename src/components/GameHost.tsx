@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download } from "lucide-react";
+import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download, Flame, Crown, Medal, PartyPopper, BarChart3, Zap, Dices, Snowflake, Sun, Palmtree, Ghost, Music, Gamepad2, ListOrdered, Search } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
@@ -47,6 +47,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const [countdownVal, setCountdownVal] = useState<number | string>(3);
   const [isSkippingLeaderboard, setIsSkippingLeaderboard] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const isTransitioningRef = useRef(false);
+  const introCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingSessionAndPlayersRef = useRef(false);
   const initialFetchDoneRef = useRef(false);
 
@@ -136,7 +138,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   // Statistics and detailed analytics states
   const [quizHistory, setQuizHistory] = useState<Record<number, QuestionHistoryRecord>>({});
-  const [activeEndTab, setActiveEndTab] = useState<"podium" | "analysis">("podium");
+  const [activeEndTab, setActiveEndTab] = useState<"podium" | "ranking" | "analysis">("podium");
+  const [hostRankingSearch, setHostRankingSearch] = useState("");
 
   // Load quiz history when session gets established
   useEffect(() => {
@@ -278,17 +281,39 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       const { data: playersData, error: pErr } = playersPayload;
 
       if (!sErr && sessionData) {
-        setSession({
-          id: sessionData.id,
-          hostId: sessionData.host_id,
-          code: sessionData.code,
-          status: sessionData.status,
-          quizId: sessionData.quiz_id,
-          quizTitle: sessionData.quiz_title,
-          currentQuestionIndex: sessionData.current_question_index,
-          questionStartTime: sessionData.question_start_time,
-          questionDuration: sessionData.question_duration,
-          totalQuestions: sessionData.total_questions,
+        setSession((prev) => {
+          if (prev) {
+            // Guard against rolling back during an active game session
+            if (sessionData.status !== "lobby" && sessionData.status !== "ended") {
+              if (sessionData.current_question_index < prev.currentQuestionIndex) {
+                // Reject stale packet: question index went backwards!
+                return prev;
+              }
+              // If host is actively transitioning (e.g. into countdown or next question), don't resurrect leaderboard
+              if (isTransitioningRef.current && sessionData.status === "leaderboard") {
+                return prev;
+              }
+            }
+            // In ended status, current_question_index represents the reveal stage (0 to 5)
+            // It must never roll backwards due to stale network packets
+            if (sessionData.status === "ended" && prev.status === "ended") {
+              if (sessionData.current_question_index < prev.currentQuestionIndex) {
+                return prev;
+              }
+            }
+          }
+          return {
+            id: sessionData.id,
+            hostId: sessionData.host_id,
+            code: sessionData.code,
+            status: sessionData.status,
+            quizId: sessionData.quiz_id,
+            quizTitle: sessionData.quiz_title,
+            currentQuestionIndex: sessionData.current_question_index,
+            questionStartTime: sessionData.question_start_time,
+            questionDuration: sessionData.question_duration,
+            totalQuestions: sessionData.total_questions,
+          };
         });
         setCode(String(sessionData.code || "").padStart(6, "0"));
         setIsInitializing(false);
@@ -465,7 +490,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         const playerAnswers: PlayerAnswerRecord[] = latestPlayers.map((p) => {
           let isCorrect = checkIsCorrect(p.current_answer_index, currentQuestion);
           let finalEarned = 0;
-          let scoreAfter = p.score ?? 0;
+          const currentScore = Math.round(Number(p.score) || 0);
+          let scoreAfter = currentScore;
 
           if (currentQuestion.questionType === "wheel_spin") {
             const selectedIndex = p.current_answer_index;
@@ -476,24 +502,31 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
               let pointsEarned = 0;
               if (textToAnalyze.includes("bankroet") || textToAnalyze.includes("verlies alles") || textToAnalyze.includes("bankrupt") || textToAnalyze.includes("alles kwijt")) {
                 scoreAfter = 0;
-                pointsEarned = -(p.score ?? 0);
+                pointsEarned = -currentScore;
               } else if (textToAnalyze.includes("verdubbel") || textToAnalyze.includes("double") || textToAnalyze.includes("x2") || textToAnalyze.includes("vermenigvuldig")) {
-                pointsEarned = p.score ?? 0;
-                scoreAfter = (p.score ?? 0) * 2;
+                pointsEarned = currentScore;
+                scoreAfter = currentScore * 2;
+              } else if (textToAnalyze.includes("gelijkspel") || textToAnalyze.includes("geen verandering") || textToAnalyze.includes("gelijk") || textToAnalyze.includes("niks") || textToAnalyze.includes("niets")) {
+                pointsEarned = 0;
+                scoreAfter = currentScore;
               } else {
                 const numberMatches = optionText.match(/[-+]?\s*\d+/g);
                 if (numberMatches && numberMatches.length > 0) {
-                  const parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
+                  let parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
                   if (!isNaN(parsedValue)) {
+                    if (textToAnalyze.includes("min ") || textToAnalyze.includes("minus") || textToAnalyze.includes("verlies")) {
+                      parsedValue = -Math.abs(parsedValue);
+                    }
                     pointsEarned = parsedValue;
-                    scoreAfter = Math.max(0, (p.score ?? 0) + pointsEarned);
+                    scoreAfter = Math.max(0, currentScore + pointsEarned);
                   }
                 } else {
                   pointsEarned = 300;
-                  scoreAfter = (p.score ?? 0) + pointsEarned;
+                  scoreAfter = currentScore + pointsEarned;
                 }
               }
-              finalEarned = pointsEarned;
+              finalEarned = Math.round(pointsEarned);
+              scoreAfter = Math.round(scoreAfter);
             }
           } else {
             const maxPoints = currentQuestion.points || 1000;
@@ -502,11 +535,11 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             const speedRatio = Math.min(1, Math.max(0, responseTime / timeLimitMs));
             const pointsEarned = isCorrect ? Math.round(maxPoints * (1 - (speedRatio / 2))) : 0;
 
-            const currentStreak = p.streak ?? 0;
+            const currentStreak = Math.round(Number(p.streak) || 0);
             const newStreak = isCorrect ? currentStreak + 1 : 0;
             const streakBonus = newStreak > 2 ? Math.min((newStreak - 2) * 50, 250) : 0;
-            finalEarned = pointsEarned > 0 ? pointsEarned + streakBonus : 0;
-            scoreAfter = (p.score ?? 0) + finalEarned;
+            finalEarned = pointsEarned > 0 ? Math.round(pointsEarned + streakBonus) : 0;
+            scoreAfter = Math.round(currentScore + finalEarned);
           }
 
           return {
@@ -514,7 +547,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             nickname: p.nickname,
             answeredIndex: p.current_answer_index,
             isCorrect,
-            scoreBefore: p.score ?? 0,
+            scoreBefore: currentScore,
             scoreAfter,
             pointsEarned: finalEarned,
           };
@@ -542,43 +575,108 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           return updated;
         });
 
-        for (const p of latestPlayers) {
-          const playerObj: Player = {
-            id: p.id,
-            nickname: p.nickname,
-            score: p.score ?? 0,
-            streak: p.streak ?? 0,
-            currentAnswerIndex: p.current_answer_index,
-            currentAnswerTime: p.current_answer_time,
-            isHost: p.is_host,
-            joinedAt: p.joined_at,
-          };
-          const { newScore, newStreak } = calculatePlayerPointsAndStreak(playerObj);
-          await supabase
-            .from("players")
-            .update({
-              score: newScore,
-              streak: newStreak,
-            })
-            .eq("id", p.id);
-        }
-      }
+        // Set session status to show_answer immediately so clients see answer screen first
+        setSession((prev) => prev ? { ...prev, status: "show_answer" } : null);
+        await supabase
+          .from("sessions")
+          .update({ status: "show_answer" })
+          .eq("id", sessionId);
 
-      await supabase
-        .from("sessions")
-        .update({ status: "show_answer" })
-        .eq("id", sessionId);
+        // Update all players in parallel with rounded whole integers
+        await Promise.all(
+          latestPlayers.map((p) => {
+            const playerObj: Player = {
+              id: p.id,
+              nickname: p.nickname,
+              score: Math.round(Number(p.score) || 0),
+              streak: Math.round(Number(p.streak) || 0),
+              currentAnswerIndex: p.current_answer_index,
+              currentAnswerTime: p.current_answer_time,
+              isHost: p.is_host,
+              joinedAt: p.joined_at,
+            };
+            const { newScore, newStreak } = calculatePlayerPointsAndStreak(playerObj);
+            return supabase
+              .from("players")
+              .update({
+                score: Math.round(newScore),
+                streak: Math.round(newStreak),
+              })
+              .eq("id", p.id);
+          })
+        );
+      } else {
+        setSession((prev) => prev ? { ...prev, status: "show_answer" } : null);
+        await supabase
+          .from("sessions")
+          .update({ status: "show_answer" })
+          .eq("id", sessionId);
+      }
     } catch (err) {
       console.error("Fout tijdens autoTransitionToAnswer:", err);
     }
   };
 
   // 4. Custom State Progression Actions
+  const launchFirstQuestion = async () => {
+    if (!sessionId || !currentQuestion) return;
+    try {
+      // Bulk reset player answer inputs for the first question
+      await supabase
+        .from("players")
+        .update({
+          current_answer_index: null,
+          current_answer_time: null,
+        })
+        .eq("session_id", sessionId);
+
+      const startTime = new Date().toISOString();
+
+      // Optimistic state update to question instantly on screen
+      setSession((prev) => prev ? {
+        ...prev,
+        status: "question",
+        questionStartTime: startTime,
+        questionDuration: currentQuestion.timeLimit,
+      } : null);
+
+      await supabase
+        .from("sessions")
+        .update({
+          status: "question",
+          question_start_time: startTime,
+          question_duration: currentQuestion.timeLimit,
+        })
+        .eq("id", sessionId);
+    } catch (err) {
+      console.error("Fout bij starten vraag:", err);
+    } finally {
+      setIsTransitioning(false);
+      isTransitioningRef.current = false;
+    }
+  };
+
+  const handleSkipIntro = async () => {
+    if (introCountdownTimerRef.current) {
+      clearTimeout(introCountdownTimerRef.current);
+      introCountdownTimerRef.current = null;
+    }
+    await launchFirstQuestion();
+  };
+
   const handleStartSpel = async () => {
     if (!sessionId || !currentQuestion || isTransitioning) return;
     setIsTransitioning(true);
+    isTransitioningRef.current = true;
     processedQuestionIndexRef.current = null;
     try {
+      // Clear answers in local state
+      setPlayers((prev) => prev.map((p) => ({
+        ...p,
+        currentAnswerIndex: null,
+        currentAnswerTime: null,
+      })));
+
       // Optimistic state update to countdown instantly on screen
       setSession((prev) => prev ? { ...prev, status: "countdown" } : null);
 
@@ -587,50 +685,22 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         .update({ status: "countdown" })
         .eq("id", sessionId);
 
-      // Quick countdown delay on big screen
-      setTimeout(async () => {
-        try {
-          // Bulk reset player answer inputs for the first question
-          await supabase
-            .from("players")
-            .update({
-              current_answer_index: null,
-              current_answer_time: null,
-            })
-            .eq("session_id", sessionId);
-
-          const startTime = new Date().toISOString();
-
-          // Optimistic state update to question instantly on screen
-          setSession((prev) => prev ? {
-            ...prev,
-            status: "question",
-            questionStartTime: startTime,
-            questionDuration: currentQuestion.timeLimit,
-          } : null);
-
-          await supabase
-            .from("sessions")
-            .update({
-              status: "question",
-              question_start_time: startTime,
-              question_duration: currentQuestion.timeLimit,
-            })
-            .eq("id", sessionId);
-        } catch (err) {
-          console.error("Fout bij starten vraag:", err);
-        } finally {
-          setIsTransitioning(false);
-        }
-      }, 4000);
+      // Intro video is ~4.92s: allow 5500ms for players & host to play the intro video fully
+      if (introCountdownTimerRef.current) clearTimeout(introCountdownTimerRef.current);
+      introCountdownTimerRef.current = setTimeout(async () => {
+        await launchFirstQuestion();
+      }, 5500);
     } catch (err) {
       console.error(err);
       setIsTransitioning(false);
+      isTransitioningRef.current = false;
     }
   };
 
   const calculatePlayerPointsAndStreak = (player: Player) => {
-    if (!currentQuestion) return { newScore: player.score, newStreak: 0, pointsEarned: 0 };
+    const currentScore = Math.round(Number(player.score) || 0);
+    const currentStreak = Math.round(Number(player.streak) || 0);
+    if (!currentQuestion) return { newScore: currentScore, newStreak: 0, pointsEarned: 0 };
 
     if (currentQuestion.questionType === "wheel_spin") {
       const selectedIndex = player.currentAnswerIndex;
@@ -639,33 +709,39 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         const optionText = currentQuestion.options[selectedIndex];
         const textToAnalyze = optionText.toLowerCase();
         let pointsEarned = 0;
-        let scoreAfter = player.score ?? 0;
+        let scoreAfter = currentScore;
         if (textToAnalyze.includes("bankroet") || textToAnalyze.includes("verlies alles") || textToAnalyze.includes("bankrupt") || textToAnalyze.includes("alles kwijt")) {
           scoreAfter = 0;
-          pointsEarned = -(player.score ?? 0);
+          pointsEarned = -currentScore;
         } else if (textToAnalyze.includes("verdubbel") || textToAnalyze.includes("double") || textToAnalyze.includes("x2") || textToAnalyze.includes("vermenigvuldig")) {
-          pointsEarned = player.score ?? 0;
-          scoreAfter = (player.score ?? 0) * 2;
+          pointsEarned = currentScore;
+          scoreAfter = currentScore * 2;
+        } else if (textToAnalyze.includes("gelijkspel") || textToAnalyze.includes("geen verandering") || textToAnalyze.includes("gelijk") || textToAnalyze.includes("niks") || textToAnalyze.includes("niets")) {
+          pointsEarned = 0;
+          scoreAfter = currentScore;
         } else {
           const numberMatches = optionText.match(/[-+]?\s*\d+/g);
           if (numberMatches && numberMatches.length > 0) {
-            const parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
+            let parsedValue = parseInt(numberMatches[0].replace(/\s+/g, ""), 10);
             if (!isNaN(parsedValue)) {
+              if (textToAnalyze.includes("min ") || textToAnalyze.includes("minus") || textToAnalyze.includes("verlies")) {
+                parsedValue = -Math.abs(parsedValue);
+              }
               pointsEarned = parsedValue;
-              scoreAfter = Math.max(0, (player.score ?? 0) + pointsEarned);
+              scoreAfter = Math.max(0, currentScore + pointsEarned);
             }
           } else {
             pointsEarned = 300;
-            scoreAfter = (player.score ?? 0) + pointsEarned;
+            scoreAfter = currentScore + pointsEarned;
           }
         }
         return {
-          newScore: scoreAfter,
-          newStreak: player.streak,
-          pointsEarned: pointsEarned,
+          newScore: Math.round(scoreAfter),
+          newStreak: currentStreak,
+          pointsEarned: Math.round(pointsEarned),
         };
       }
-      return { newScore: player.score, newStreak: player.streak, pointsEarned: 0 };
+      return { newScore: currentScore, newStreak: currentStreak, pointsEarned: 0 };
     }
 
     const isCorrect = checkIsCorrect(player.currentAnswerIndex, currentQuestion);
@@ -679,13 +755,13 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
       pointsEarned = Math.round(maxPoints * (1 - (speedRatio / 2)));
     }
 
-    const newStreak = isCorrect ? player.streak + 1 : 0;
+    const newStreak = isCorrect ? currentStreak + 1 : 0;
     const streakBonus = newStreak > 2 ? Math.min((newStreak - 2) * 50, 250) : 0;
-    const finalEarned = pointsEarned > 0 ? pointsEarned + streakBonus : 0;
+    const finalEarned = pointsEarned > 0 ? Math.round(pointsEarned + streakBonus) : 0;
 
     return {
-      newScore: player.score + finalEarned,
-      newStreak,
+      newScore: Math.round(Math.max(0, currentScore + finalEarned)),
+      newStreak: Math.round(newStreak),
       pointsEarned: finalEarned,
     };
   };
@@ -693,6 +769,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const handleGoToLeaderboard = async () => {
     if (!sessionId) return;
     try {
+      setSession((prev) => prev ? { ...prev, status: "leaderboard" } : null);
       await supabase
         .from("sessions")
         .update({ status: "leaderboard" })
@@ -706,6 +783,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     if (!sessionId || !currentQuestion || !session || isTransitioning) return;
     setIsSkippingLeaderboard(true);
     setIsTransitioning(true);
+    isTransitioningRef.current = true;
+    processedQuestionIndexRef.current = null;
     try {
       // Progress immediately as player scores are already processed
       const nextIdx = session.currentQuestionIndex + 1;
@@ -718,8 +797,16 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
         setIsTransitioning(false);
+        isTransitioningRef.current = false;
       } else {
         const nextQ = quiz.questions[nextIdx];
+
+        // Optimistically clear answers in local state
+        setPlayers((prev) => prev.map((p) => ({
+          ...p,
+          currentAnswerIndex: null,
+          currentAnswerTime: null,
+        })));
 
         // Optimistic state update to countdown instantly on screen
         setSession((prev) => prev ? {
@@ -729,14 +816,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           status: "countdown",
         } : null);
 
-        await supabase
-          .from("players")
-          .update({
-            current_answer_index: null,
-            current_answer_time: null,
-          })
-          .eq("session_id", sessionId);
-
+        // Update sessions table FIRST so any query immediately sees countdown and new question index
         await supabase
           .from("sessions")
           .update({
@@ -745,6 +825,14 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             status: "countdown",
           })
           .eq("id", sessionId);
+
+        await supabase
+          .from("players")
+          .update({
+            current_answer_index: null,
+            current_answer_time: null,
+          })
+          .eq("session_id", sessionId);
 
         setTimeout(async () => {
           try {
@@ -756,6 +844,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
               status: "question",
               questionStartTime: startTime,
               questionDuration: nextQ.timeLimit,
+              currentQuestionIndex: nextIdx,
             } : null);
 
             await supabase
@@ -763,18 +852,22 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
               .update({
                 status: "question",
                 question_start_time: startTime,
+                current_question_index: nextIdx,
+                question_duration: nextQ.timeLimit,
               })
               .eq("id", sessionId);
           } catch (err) {
             console.error(err);
           } finally {
             setIsTransitioning(false);
+            isTransitioningRef.current = false;
           }
         }, 4000);
       }
     } catch (err) {
       console.error("Fout tijdens overslaan van leaderboard:", err);
       setIsTransitioning(false);
+      isTransitioningRef.current = false;
     } finally {
       setIsSkippingLeaderboard(false);
     }
@@ -786,6 +879,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
     const isLast = nextIdx >= quiz.questions.length;
 
     setIsTransitioning(true);
+    isTransitioningRef.current = true;
+    processedQuestionIndexRef.current = null;
     try {
       if (isLast) {
         setSession((prev) => prev ? { ...prev, status: "ended", currentQuestionIndex: 0 } : null);
@@ -794,8 +889,16 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           .update({ status: "ended", current_question_index: 0 })
           .eq("id", sessionId);
         setIsTransitioning(false);
+        isTransitioningRef.current = false;
       } else {
         const nextQ = quiz.questions[nextIdx];
+
+        // Optimistically clear answers in local state
+        setPlayers((prev) => prev.map((p) => ({
+          ...p,
+          currentAnswerIndex: null,
+          currentAnswerTime: null,
+        })));
 
         // Optimistic state update to countdown instantly on screen
         setSession((prev) => prev ? {
@@ -805,15 +908,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
           status: "countdown",
         } : null);
 
-        // Bulk Reset player answers in one query
-        await supabase
-          .from("players")
-          .update({
-            current_answer_index: null,
-            current_answer_time: null,
-          })
-          .eq("session_id", sessionId);
-
+        // Update sessions table FIRST so any query immediately sees countdown and new question index
         await supabase
           .from("sessions")
           .update({
@@ -822,6 +917,15 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             status: "countdown",
           })
           .eq("id", sessionId);
+
+        // Bulk Reset player answers in database
+        await supabase
+          .from("players")
+          .update({
+            current_answer_index: null,
+            current_answer_time: null,
+          })
+          .eq("session_id", sessionId);
 
         setTimeout(async () => {
           try {
@@ -833,6 +937,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
               status: "question",
               questionStartTime: startTime,
               questionDuration: nextQ.timeLimit,
+              currentQuestionIndex: nextIdx,
             } : null);
 
             await supabase
@@ -840,18 +945,22 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
               .update({
                 status: "question",
                 question_start_time: startTime,
+                current_question_index: nextIdx,
+                question_duration: nextQ.timeLimit,
               })
               .eq("id", sessionId);
           } catch (err) {
             console.error("Fout bij tonen volgende vraag:", err);
           } finally {
             setIsTransitioning(false);
+            isTransitioningRef.current = false;
           }
         }, 4000);
       }
     } catch (err) {
       console.error(err);
       setIsTransitioning(false);
+      isTransitioningRef.current = false;
     }
   };
 
@@ -975,19 +1084,19 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
   const downloadCSV = () => {
     const csvContent = [
-      ["Plaats", "Speler", "Score (punten)", "Streak"].map(header => `"${header.replace(/"/g, '""')}"`).join(","),
+      ["Plaats", "Speler", "Score (punten)", "Streak"].map(header => `"${header.replace(/"/g, '""')}"`).join(";"),
       ...sortedPlayers.map((player, idx) => {
         const { displayName } = parseNicknameAndAvatar(player.nickname || "");
         return [
           idx + 1,
           `"${(displayName || "").replace(/"/g, '""')}"`,
-          player.score ?? 0,
-          player.streak ?? 0
-        ].join(",");
+          Math.round(Number(player.score) || 0),
+          Math.round(Number(player.streak) || 0)
+        ].join(";");
       })
-    ].join("\n");
+    ].join("\r\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
@@ -1036,42 +1145,42 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
         <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
           {activeTheme.name === "Winter" && (
             <>
-              <div className="absolute top-[10%] left-[15%] text-3xl animate-bounce">❄️</div>
-              <div className="absolute top-[35%] left-[85%] text-2xl animate-bounce">❄️</div>
-              <div className="absolute top-[75%] left-[8%] text-4xl animate-bounce">❄️</div>
-              <div className="absolute top-[18%] left-[55%] text-xl animate-bounce">❄️</div>
-              <div className="absolute top-[65%] left-[70%] text-3xl animate-bounce">❄️</div>
+              <div className="absolute top-[10%] left-[15%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
+              <div className="absolute top-[35%] left-[85%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
+              <div className="absolute top-[75%] left-[8%] text-indigo-200/40 animate-bounce"><Snowflake className="w-12 h-12" /></div>
+              <div className="absolute top-[18%] left-[55%] text-indigo-200/40 animate-bounce"><Snowflake className="w-6 h-6" /></div>
+              <div className="absolute top-[65%] left-[70%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
             </>
           )}
           {activeTheme.name === "Zomer" && (
             <>
-              <div className="absolute top-[8%] left-[22%] text-4xl animate-spin duration-10000">☀️</div>
-              <div className="absolute top-[20%] left-[80%] text-4xl animate-pulse">🌴</div>
-              <div className="absolute bottom-[12%] left-[6%] text-3xl">🍹</div>
-              <div className="absolute bottom-[18%] right-[12%] text-4xl animate-bounce">🍦</div>
+              <div className="absolute top-[8%] left-[22%] text-amber-300/40 animate-spin duration-10000"><Sun className="w-12 h-12" /></div>
+              <div className="absolute top-[20%] left-[80%] text-emerald-400/40 animate-pulse"><Palmtree className="w-12 h-12" /></div>
+              <div className="absolute bottom-[12%] left-[6%] text-amber-400/40"><Sun className="w-9 h-9" /></div>
+              <div className="absolute bottom-[18%] right-[12%] text-emerald-300/40 animate-bounce"><Palmtree className="w-12 h-12" /></div>
             </>
           )}
           {activeTheme.name === "Halloween" && (
             <>
-              <div className="absolute top-[12%] left-[12%] text-4xl animate-bounce">👻</div>
-              <div className="absolute top-[45%] left-[82%] text-4xl animate-pulse">🎃</div>
-              <div className="absolute bottom-[18%] left-[40%] text-4xl animate-bounce">🦇</div>
-              <div className="absolute top-[28%] left-[68%] text-3xl">🕸️</div>
+              <div className="absolute top-[12%] left-[12%] text-purple-300/40 animate-bounce"><Ghost className="w-12 h-12" /></div>
+              <div className="absolute top-[45%] left-[82%] text-orange-400/40 animate-pulse"><Ghost className="w-12 h-12" /></div>
+              <div className="absolute bottom-[18%] left-[40%] text-purple-300/40 animate-bounce"><Ghost className="w-12 h-12" /></div>
+              <div className="absolute top-[28%] left-[68%] text-orange-400/30"><Ghost className="w-10 h-10" /></div>
             </>
           )}
           {activeTheme.name === "Kosmisch" && (
             <>
-              <div className="absolute top-[12%] left-[22%] text-xl animate-pulse">⭐</div>
-              <div className="absolute top-[48%] left-[85%] text-2xl animate-pulse">✨</div>
-              <div className="absolute bottom-[18%] left-[12%] text-4xl animate-pulse">🪐</div>
-              <div className="absolute top-[68%] left-[58%] text-2xl animate-pulse">🌟</div>
+              <div className="absolute top-[12%] left-[22%] text-amber-200/40 animate-pulse"><Sparkles className="w-8 h-8" /></div>
+              <div className="absolute top-[48%] left-[85%] text-indigo-300/40 animate-pulse"><Sparkles className="w-10 h-10" /></div>
+              <div className="absolute bottom-[18%] left-[12%] text-indigo-400/40 animate-pulse"><Sparkles className="w-12 h-12" /></div>
+              <div className="absolute top-[68%] left-[58%] text-amber-300/40 animate-pulse"><Sparkles className="w-8 h-8" /></div>
             </>
           )}
           {activeTheme.name === "Neon Retro" && (
             <>
               <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0)_95%,rgba(244,63,94,0.15)_95%)] bg-[size:100%_40px] animate-pulse" />
-              <div className="absolute top-[12%] left-[12%] text-3xl animate-pulse">⚡</div>
-              <div className="absolute top-[58%] left-[85%] text-3xl animate-pulse">🕹️</div>
+              <div className="absolute top-[12%] left-[12%] text-pink-400/40 animate-pulse"><Zap className="w-10 h-10" /></div>
+              <div className="absolute top-[58%] left-[85%] text-cyan-400/40 animate-pulse"><Gamepad2 className="w-10 h-10" /></div>
             </>
           )}
         </div>
@@ -1199,7 +1308,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="absolute w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none -top-10 -left-10" />
                     <div className="relative z-10">
                       <h4 className="text-indigo-400 font-bold uppercase tracking-wider text-xs flex items-center gap-2">
-                        <span>🎵</span> Lobby Achtergrondmuziek
+                        <Music className="w-4 h-4 text-indigo-400" /> Lobby Achtergrondmuziek
                       </h4>
                       <p className="text-slate-400 text-xs mt-1">
                         Kies een soundtrack voor de lobby. De selectie begint meteen te spelen en wordt ook gesynchroniseerd geloopt bij wachende deelnemers.
@@ -1227,7 +1336,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
                         }`}
                       >
-                        <span>Soundtrack 2 (Retro) 🕹️</span>
+                        <span>Soundtrack 2 (Retro)</span>
                         {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
                       </button>
 
@@ -1239,7 +1348,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
                         }`}
                       >
-                        <span>Soundtrack 3 (Upbeat) ⚡</span>
+                        <span>Soundtrack 3 (Upbeat)</span>
                         {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
                       </button>
                     </div>
@@ -1344,26 +1453,53 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     )}
                   </h2>
 
-                  <div className="relative flex items-center justify-center">
-                    <div className="absolute w-40 h-40 rounded-full bg-indigo-500/10 animate-ping" />
-                    
-                    <AnimatePresence mode="popLayout">
-                      <motion.div
-                        key={countdownVal}
-                        initial={{ scale: 0.3, opacity: 0 }}
-                        animate={{ scale: 1.1, opacity: 1 }}
-                        exit={{ scale: 1.4, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                        className={`inline-flex items-center justify-center w-36 h-36 rounded-full border-4 ${
-                          countdownVal === "GO!" 
-                            ? "border-emerald-500 bg-emerald-950/65 text-emerald-300" 
-                            : "border-indigo-500 bg-indigo-950/65 text-indigo-300"
-                        } text-6xl font-black font-display`}
-                      >
-                        {countdownVal}
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
+                  {session.currentQuestionIndex === 0 ? (
+                    <div className="w-full max-w-2xl mx-auto space-y-4 animate-fade-in px-4">
+                      <div className="relative aspect-video rounded-3xl overflow-hidden bg-black border-2 border-indigo-500/50 shadow-2xl">
+                        <video
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-contain"
+                        >
+                          <source src="/uploads/intro_kahotie.mp4" type="video/mp4" />
+                          <source src="/uploads/Intro%20kahotie.mp4" type="video/mp4" />
+                          Jouw browser ondersteunt deze video niet.
+                        </video>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-2 text-xs text-slate-400">
+                        <span className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono">
+                          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" /> Quiz start video speelt af op alle toestellen...
+                        </span>
+                        <button
+                          onClick={handleSkipIntro}
+                          className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer font-bold transition flex items-center gap-1"
+                        >
+                          <span>Start Vraag 1 Nu</span> <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative flex items-center justify-center">
+                      <div className="absolute w-40 h-40 rounded-full bg-indigo-500/10 animate-ping" />
+                      
+                      <AnimatePresence mode="popLayout">
+                        <motion.div
+                          key={countdownVal}
+                          initial={{ scale: 0.3, opacity: 0 }}
+                          animate={{ scale: 1.1, opacity: 1 }}
+                          exit={{ scale: 1.4, opacity: 0 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                          className={`inline-flex items-center justify-center w-36 h-36 rounded-full border-4 ${
+                            countdownVal === "GO!" 
+                              ? "border-emerald-500 bg-emerald-950/65 text-emerald-300" 
+                              : "border-indigo-500 bg-indigo-950/65 text-indigo-300"
+                          } text-6xl font-black font-display`}
+                        >
+                          {countdownVal}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -1394,8 +1530,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
 
                   {/* Question Prompt */}
                   <div className={`${activeTheme.cardBg} rounded-3xl px-8 py-10 text-center space-y-4 shadow-xl relative z-10`}>
-                    <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase">
-                      {currentQuestion.questionType === "wheel_spin" ? "KANS-GOKRONDE 🎰" : "MEERKEUZEVRAAG"}
+                    <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase flex items-center justify-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 inline" />
+                      {currentQuestion.questionType === "wheel_spin" ? "KANS-GOKRONDE" : "MEERKEUZEVRAAG"}
                     </p>
                     <h1 className="text-3xl md:text-4xl font-extrabold text-white font-display leading-snug">
                       {currentQuestion.questionText}
@@ -1422,13 +1559,15 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                        className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-dashed border-amber-500/60 flex items-center justify-center text-5xl md:text-6xl filter drop-shadow-[0_0_15px_rgba(234,179,8,0.2)] bg-slate-950/45"
+                        className="w-32 h-32 md:w-40 md:h-40 rounded-full border-8 border-dashed border-amber-500/60 flex items-center justify-center text-amber-400 filter drop-shadow-[0_0_15px_rgba(234,179,8,0.2)] bg-slate-950/45"
                       >
-                        🎰
+                        <Dices className="w-16 h-16 md:w-20 md:h-20" />
                       </motion.div>
 
                       <div className="space-y-2 relative z-10">
-                        <h2 className="text-2xl md:text-3xl font-black text-amber-400 font-display uppercase tracking-wider animate-pulse">Draai aan het Rad! 🎯</h2>
+                        <h2 className="text-2xl md:text-3xl font-black text-amber-400 font-display uppercase tracking-wider animate-pulse flex items-center justify-center gap-2">
+                          <Sparkles className="w-7 h-7 inline text-amber-400" /> Draai aan het Rad!
+                        </h2>
                         <p className="text-slate-300 text-sm max-w-md mx-auto leading-relaxed">
                           Alle spelers mogen nu op hun eigen toestel aan het Rad van Fortuin draaien om hun score drastisch te beïnvloeden!
                         </p>
@@ -1468,8 +1607,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                           </div>
 
                           <div className="space-y-4 relative z-10 w-full max-w-lg">
-                            <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider">
-                              Schuif naar de juiste waarde 🎚️
+                            <h2 className="text-xl md:text-2xl font-black text-teal-400 font-display uppercase tracking-wider flex items-center justify-center gap-2">
+                              <Sliders className="w-5 h-5 text-teal-400" /> Schuif naar de juiste waarde
                             </h2>
                             <p className="text-xs text-slate-400 font-bold italic">
                               Kies een waarde tussen {min.toLocaleString("nl-NL")} en {max.toLocaleString("nl-NL")}!
@@ -1510,12 +1649,12 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="grid md:grid-cols-2 gap-4">
                       {currentQuestion.options.map((option, idx) => {
                         const styleInfo = [
-                          { bg: "bg-red-500 border-red-700", label: "🔴" },
-                          { bg: "bg-blue-500 border-blue-700", label: "🔵" },
-                          { bg: "bg-yellow-500 border-yellow-600 text-slate-950", label: "🟡" },
-                          { bg: "bg-green-500 border-green-700", label: "🟢" },
-                          { bg: "bg-purple-500 border-purple-700", label: "🟣" },
-                          { bg: "bg-orange-500 border-orange-700", label: "🟠" },
+                          { bg: "bg-red-500 border-red-700" },
+                          { bg: "bg-blue-500 border-blue-700" },
+                          { bg: "bg-yellow-500 border-yellow-600 text-slate-950" },
+                          { bg: "bg-green-500 border-green-700" },
+                          { bg: "bg-purple-500 border-purple-700" },
+                          { bg: "bg-orange-500 border-orange-700" },
                         ];
                         const style = styleInfo[idx % styleInfo.length];
                         return (
@@ -1523,7 +1662,9 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             key={idx}
                             className={`flex items-center gap-4 px-6 py-5 rounded-2xl border text-xl font-bold ${style.bg} font-display text-white shadow-sm`}
                           >
-                            <span className="text-2xl select-none">{style.label}</span>
+                            <span className="w-8 h-8 rounded-full bg-black/25 flex items-center justify-center font-mono font-black text-sm select-none shrink-0">
+                              #{idx + 1}
+                            </span>
                             <span>{option}</span>
                           </div>
                         );
@@ -1562,8 +1703,14 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                   className="space-y-6"
                 >
                   <div className="text-center space-y-1">
-                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest">
-                      {currentQuestion.questionType === "wheel_spin" ? "Gokresultaten 🎰" : "Resultaat"}
+                    <span className="text-xs text-emerald-400 font-bold uppercase tracking-widest flex items-center justify-center gap-1.5">
+                      {currentQuestion.questionType === "wheel_spin" ? (
+                        <>
+                          <Dices className="w-4 h-4 text-amber-400 inline" /> Gokresultaten
+                        </>
+                      ) : (
+                        "Resultaat"
+                      )}
                     </span>
                     <h1 className="text-3xl font-black font-display text-white">
                       {currentQuestion.questionType === "wheel_spin" ? "De geraspte uitkomsten van het gokrad!" : "Correcte antwoord is onthuld!"}
@@ -1833,7 +1980,11 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                         disabled={isSkippingLeaderboard}
                         className="w-full flex items-center justify-center gap-2 border border-slate-700 bg-slate-900/65 hover:bg-slate-800 disabled:opacity-40 text-slate-300 hover:text-white py-3 rounded-xl font-bold transition cursor-pointer text-xs"
                       >
-                        {isSkippingLeaderboard ? "Laden..." : "Sla Leaderboard Over ⚡"}
+                        {isSkippingLeaderboard ? "Laden..." : (
+                          <>
+                            Sla Leaderboard Over <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -1888,8 +2039,8 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   )}
                                 </div>
                                 {player.streak > 1 && (
-                                  <span className="inline-flex items-center gap-0.5 bg-orange-600 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white animate-pulse shrink-0">
-                                    🔥 {player.streak} Streak
+                                  <span className="inline-flex items-center gap-1 bg-orange-600 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white animate-pulse shrink-0">
+                                    <Flame className="w-3 h-3 text-amber-200 inline" /> {player.streak} Streak
                                   </span>
                                 )}
                               </div>
@@ -1940,36 +2091,46 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                       </>
                     ) : (
                       <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-display text-white flex items-center justify-center gap-2">
-                        🏆 EINDSTAND PODIUM 🏆
+                        <Trophy className="w-7 h-7 text-amber-400 inline" /> EINDSTAND PODIUM <Trophy className="w-7 h-7 text-amber-400 inline" />
                       </h1>
                     )}
                   </div>
 
                   {/* Tab switches for the host */}
-                  <div className="flex justify-center gap-4 max-w-md mx-auto">
+                  <div className="flex flex-wrap justify-center gap-2.5 sm:gap-4 max-w-xl mx-auto">
                     <button
                       onClick={() => setActiveEndTab("podium")}
-                      className={`px-6 py-2.5 rounded-full font-bold text-sm transition cursor-pointer flex items-center gap-2 ${
+                      className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer flex items-center gap-2 ${
                         activeEndTab === "podium"
                           ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
                           : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
                       }`}
                     >
-                      🏆 Podium
+                      <Trophy className="w-4 h-4 inline text-amber-400" /> Podium
+                    </button>
+                    <button
+                      onClick={() => setActiveEndTab("ranking")}
+                      className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer flex items-center gap-2 ${
+                        activeEndTab === "ranking"
+                          ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
+                          : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
+                      }`}
+                    >
+                      <ListOrdered className="w-4 h-4 inline text-indigo-400" /> Ranglijst Overzicht ({sortedPlayers.length})
                     </button>
                     <button
                       onClick={() => setActiveEndTab("analysis")}
-                      className={`px-6 py-2.5 rounded-full font-bold text-sm transition cursor-pointer flex items-center gap-2 ${
+                      className={`px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer flex items-center gap-2 ${
                         activeEndTab === "analysis"
                           ? "bg-indigo-600 text-white shadow-md border border-indigo-500"
                           : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-transparent"
                       }`}
                     >
-                      📊 Gedetailleerd Overzicht
+                      <BarChart3 className="w-4 h-4 inline text-emerald-400" /> Vraaganalyse
                     </button>
                   </div>
 
-                  {activeEndTab === "podium" ? (
+                  {activeEndTab === "podium" && (
                     <div className="animate-fade-in relative px-4 max-w-4xl mx-auto">
                       {/* Ambient Glowing Background Halos under columns */}
                       <div className="absolute inset-0 pointer-events-none flex justify-center items-end gap-12 md:gap-24 opacity-30 blur-3xl overflow-hidden -z-10">
@@ -2016,7 +2177,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             return (
                               <div className="flex flex-col items-center w-20 sm:w-32 md:w-40 opacity-40 select-none">
                                 <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-base md:text-xl shadow-inner animate-pulse">
-                                  🔒
+                                  <Lock className="w-6 h-6 text-slate-600" />
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-xs sm:text-sm mb-0.5">???</span>
                                 <span className="text-slate-400 font-mono text-[10px] sm:text-xs font-semibold mb-1.5">0 pt</span>
@@ -2049,7 +2210,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   <span className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 text-[11px] sm:text-xs font-extrabold w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display animate-pulse shadow-md">1</span>
                                 </div>
                                 <span className="text-amber-300 font-display font-black text-xs sm:text-base md:text-xl mb-0.5 max-w-full truncate px-1 text-center drop-shadow-md flex items-center justify-center gap-1.5" title={n0}>
-                                  👑 {n0}
+                                  <Crown className="w-5 h-5 text-amber-400 inline mr-0.5 shrink-0" /> {n0}
                                   {v0 && (
                                     <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs">
                                       ✓
@@ -2067,7 +2228,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             return (
                               <div className="flex flex-col items-center w-26 sm:w-38 md:w-48 opacity-40 select-none z-20">
                                 <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-lg sm:text-2xl shadow-inner animate-pulse">
-                                  🔒
+                                  <Lock className="w-7 h-7 text-slate-600" />
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-xs sm:text-base mb-0.5">???</span>
                                 <span className="text-slate-400 font-mono text-[10px] sm:text-sm font-semibold mb-2">0 pt</span>
@@ -2115,7 +2276,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             return (
                               <div className="flex flex-col items-center w-18 sm:w-28 md:w-36 opacity-40 select-none">
                                 <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-slate-950 border-2 border-dashed border-slate-800 rounded-full mb-1.5 flex items-center justify-center text-slate-600 text-sm sm:text-lg shadow-inner animate-pulse">
-                                  🔒
+                                  <Lock className="w-5 h-5 text-slate-600" />
                                 </div>
                                 <span className="text-slate-600 font-display font-bold text-[10px] sm:text-sm mb-0.5">???</span>
                                 <span className="text-slate-400 font-mono text-[9px] sm:text-xs font-semibold mb-1.5">0 pt</span>
@@ -2166,7 +2327,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             return (
                               <div className="bg-slate-950/20 p-4 rounded-xl border border-dashed border-slate-800/80 flex items-center gap-3 opacity-30 justify-center select-none w-full">
                                 <span className="text-slate-500 font-display font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5">
-                                  🔒 4e Standings
+                                  <Lock className="w-3.5 h-3.5 text-slate-600" /> 4e Standings
                                 </span>
                               </div>
                             );
@@ -2209,7 +2370,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             return (
                               <div className="bg-slate-950/20 p-4 rounded-xl border border-dashed border-slate-800/80 flex items-center gap-3 opacity-30 justify-center select-none w-full">
                                 <span className="text-slate-500 font-display font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5">
-                                  🔒 5e Standings
+                                  <Lock className="w-3.5 h-3.5 text-slate-600" /> 5e Standings
                                 </span>
                               </div>
                             );
@@ -2229,19 +2390,19 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   className="w-full sm:flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 px-6 rounded-2xl transition flex items-center justify-center gap-2.5 cursor-pointer shadow-lg font-display text-sm animate-pulse-glow"
                                 >
                                   {revealStage === 0 && (
-                                    <>🎖️ Onthul 5e Plaats <ArrowRight className="w-4 h-4" /></>
+                                    <><Award className="w-4 h-4 text-indigo-300" /> Onthul 5e Plaats <ArrowRight className="w-4 h-4" /></>
                                   )}
                                   {revealStage === 1 && (
-                                    <>🎖️ Onthul 4e Plaats <ArrowRight className="w-4 h-4" /></>
+                                    <><Award className="w-4 h-4 text-indigo-300" /> Onthul 4e Plaats <ArrowRight className="w-4 h-4" /></>
                                   )}
                                   {revealStage === 2 && (
-                                    <>🥉 Onthul 3e Plaats <ArrowRight className="w-4 h-4" /></>
+                                    <><Medal className="w-4 h-4 text-amber-600" /> Onthul 3e Plaats <ArrowRight className="w-4 h-4" /></>
                                   )}
                                   {revealStage === 3 && (
-                                    <>🥈 Onthul 2e Plaats <ArrowRight className="w-4 h-4" /></>
+                                    <><Medal className="w-4 h-4 text-slate-300" /> Onthul 2e Plaats <ArrowRight className="w-4 h-4" /></>
                                   )}
                                   {revealStage === 4 && (
-                                    <>🏆 Onthul de Winnaar! <Sparkles className="w-4 h-4 text-yellow-300" /></>
+                                    <><Trophy className="w-4 h-4 text-amber-300" /> Onthul de Winnaar! <Sparkles className="w-4 h-4 text-yellow-300" /></>
                                   )}
                                 </button>
                                 <button
@@ -2252,71 +2413,188 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                 </button>
                               </>
                             ) : (
-                              <div className="text-emerald-400 font-black text-sm flex items-center gap-2 py-1.5 animate-pulse justify-center w-full">
-                                <span>🎉 Alle finalisten en de winnaar zijn onthuld! 🎉</span>
+                              <div className="space-y-4 w-full">
+                                <div className="text-emerald-400 font-black text-sm flex items-center gap-2 py-1.5 animate-pulse justify-center w-full">
+                                  <PartyPopper className="w-5 h-5 text-amber-400 inline shrink-0" />
+                                  <span>Alle finalisten en de winnaar zijn onthuld!</span>
+                                  <PartyPopper className="w-5 h-5 text-amber-400 inline shrink-0" />
+                                </div>
+
+                                <motion.div
+                                  initial={{ opacity: 0, y: 15 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  className="bg-slate-900/90 border border-indigo-500/40 rounded-2xl p-4 shadow-2xl space-y-3 text-center"
+                                >
+                                  <div className="flex items-center justify-between px-1">
+                                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                                      <Sparkles className="w-4 h-4 text-indigo-400" /> Bedankt voor het meespelen!
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono">Slotvideo</span>
+                                  </div>
+                                  <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-inner flex items-center justify-center">
+                                    <video
+                                      src="/uploads/IMG_6220.MP4"
+                                      controls
+                                      playsInline
+                                      autoPlay
+                                      className="w-full h-full object-contain"
+                                    >
+                                      <source src="/uploads/IMG_6220.MP4" type="video/mp4" />
+                                      <source src="/uploads/IMG_6220.mp4" type="video/mp4" />
+                                      Je browser ondersteunt deze video niet.
+                                    </video>
+                                  </div>
+                                  <p className="text-xs text-slate-400">
+                                    Bedankt aan alle deelnemers voor een geweldige quizronde!
+                                  </p>
+                                </motion.div>
                               </div>
                             )}
                           </div>
                         );
                       })()}
                     </div>
-                  ) : (
-                    <div className="text-left space-y-8 max-w-4xl mx-auto px-4 pb-12 animate-fade-in text-slate-200">
-                      {/* Section 1: All Player Points Overview */}
+                  )}
+
+                  {activeEndTab === "ranking" && (
+                    <div className="text-left space-y-6 max-w-4xl mx-auto px-4 pb-12 animate-fade-in text-slate-200">
+                      {/* Ranking Stats Overview */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                            <Users className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Totaal Deelnemers</p>
+                            <p className="text-xl font-black text-white font-mono">{sortedPlayers.length}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                            <Trophy className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Hoogste Score</p>
+                            <p className="text-xl font-black text-amber-300 font-mono">{sortedPlayers[0]?.score ?? 0} pt</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center gap-3.5 shadow-md">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Award className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Gemiddelde Score</p>
+                            <p className="text-xl font-black text-emerald-400 font-mono">
+                              {sortedPlayers.length > 0 
+                                ? Math.round(sortedPlayers.reduce((acc, p) => acc + (p.score ?? 0), 0) / sortedPlayers.length) 
+                                : 0} pt
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Main Ranking Table Card */}
                       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                           <div>
-                            <h2 className="text-lg font-bold font-display text-white">Eindstand Spelers</h2>
-                            <p className="text-xs text-slate-400 mt-0.5">Snel overzicht van alle scores en placements</p>
+                            <h2 className="text-lg font-bold font-display text-white flex items-center gap-2">
+                              <ListOrdered className="w-5 h-5 text-indigo-400" /> Eindstand Ranglijst
+                            </h2>
+                            <p className="text-xs text-slate-400 mt-0.5">Volledig overzicht van alle deelnemers en hun behaalde scores</p>
                           </div>
-                          <div className="flex items-center gap-2.5">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            <div className="relative min-w-[180px]">
+                              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                              <input
+                                type="text"
+                                placeholder="Zoek speler..."
+                                value={hostRankingSearch}
+                                onChange={(e) => setHostRankingSearch(e.target.value)}
+                                className="w-full bg-slate-800 text-slate-200 text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-700/60 focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
                             <button
                               onClick={downloadCSV}
                               className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 border border-indigo-500 hover:shadow-lg shadow-indigo-600/10 shrink-0"
                             >
                               <Download className="w-3.5 h-3.5" /> Download CSV
                             </button>
-                            <span className="bg-indigo-950/40 text-indigo-400 text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border border-indigo-900 font-mono shrink-0">
-                              {sortedPlayers.length} Spelers
-                            </span>
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {sortedPlayers.map((player, idx) => {
-                            const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(player.nickname || "");
-                            return (
-                              <div key={player.id || idx} className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-800/60 hover:border-slate-800 transition">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-slate-800 font-display font-black text-sm flex items-center justify-center text-slate-300">
-                                    {idx + 1}
-                                  </div>
-                                  <img src={avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border border-slate-700" />
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <h4 className="font-extrabold text-white text-sm">{displayName}</h4>
-                                      {isVerified && (
-                                        <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
-                                          ✓
-                                        </span>
-                                      )}
+
+                        {/* Players List Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[550px] overflow-y-auto pr-1">
+                          {sortedPlayers
+                            .filter((player) => {
+                              if (!hostRankingSearch.trim()) return true;
+                              const { displayName } = parseNicknameAndAvatar(player.nickname || "");
+                              return displayName.toLowerCase().includes(hostRankingSearch.toLowerCase().trim());
+                            })
+                            .map((player) => {
+                              const rank = sortedPlayers.findIndex(p => p.id === player.id) + 1;
+                              const { displayName, avatarUrl, isVerified } = parseNicknameAndAvatar(player.nickname || "");
+                              return (
+                                <div
+                                  key={player.id}
+                                  className={`flex items-center justify-between p-3.5 rounded-xl border transition ${
+                                    rank === 1
+                                      ? "bg-amber-500/10 border-amber-500/30"
+                                      : rank === 2
+                                      ? "bg-slate-300/10 border-slate-400/30"
+                                      : rank === 3
+                                      ? "bg-amber-700/10 border-amber-700/30"
+                                      : "bg-slate-800/70 border-slate-700/50 hover:border-slate-600"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className={`w-8 h-8 rounded-full font-display font-black text-xs flex items-center justify-center shrink-0 text-white border ${
+                                      rank === 1
+                                        ? "bg-amber-500 border-amber-300 shadow-sm"
+                                        : rank === 2
+                                        ? "bg-slate-400 border-slate-200 text-slate-950"
+                                        : rank === 3
+                                        ? "bg-amber-700 border-amber-500"
+                                        : "bg-slate-800 border-slate-700 text-slate-400"
+                                    }`}>
+                                      {rank}
                                     </div>
-                                    <p className="text-xs text-slate-400">Plaats #{idx + 1}</p>
+                                    <img src={avatarUrl} alt="Avatar" className="w-9 h-9 rounded-full border border-slate-700 bg-slate-900 shrink-0" />
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 max-w-full">
+                                        <h4 className="font-extrabold text-white text-xs sm:text-sm truncate">{displayName}</h4>
+                                        {isVerified && (
+                                          <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-xs" title="Geverifieerd">
+                                            ✓
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 font-mono">
+                                        {rank === 1 ? "1e Plaats • Goud" : rank === 2 ? "2e Plaats • Zilver" : rank === 3 ? "3e Plaats • Brons" : `Plaats #${rank}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0 pl-2">
+                                    <p className={`font-mono font-black text-xs sm:text-sm ${rank === 1 ? "text-amber-400" : rank <= 3 ? "text-slate-200" : "text-indigo-400"}`}>
+                                      {player.score ?? 0} pt
+                                    </p>
+                                    {player.streak > 1 && (
+                                      <span className="text-[9px] bg-orange-600/20 text-orange-400 px-1.5 py-0.5 rounded font-black inline-flex items-center gap-1">
+                                        <Flame className="w-2.5 h-2.5 text-orange-400 inline" /> {player.streak}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-mono font-black text-indigo-400 text-sm">{player.score ?? 0} pt</p>
-                                  {player.streak > 1 && (
-                                    <span className="text-[10px] bg-orange-600/20 text-orange-400 px-1.5 py-0.5 rounded font-black">
-                                      🔥 {player.streak} Streak
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {activeEndTab === "analysis" && (
+                    <div className="text-left space-y-8 max-w-4xl mx-auto px-4 pb-12 animate-fade-in text-slate-200">
 
                       {/* Section 2: Question-by-Question breakdown analysis */}
                       <div className="space-y-6">

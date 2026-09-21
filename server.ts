@@ -78,10 +78,57 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "32mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "32mb" }));
 
   // In-memory store for session music URLs
   const sessionMusicStore: Record<string, string> = {};
+
+  // ImgBB Image Upload API Proxy
+  app.post("/api/upload-image", async (req, res) => {
+    try {
+      const { image, name } = req.body || {};
+      if (!image) {
+        return res.status(400).json({ error: "Geen afbeelding meegegeven" });
+      }
+
+      const apiKey = process.env.IMGBB_API_KEY || "696dd307262986c0058019dd5f7906a5";
+      const cleanBase64 = typeof image === "string" ? image.replace(/^data:image\/\w+;base64,/, "") : image;
+
+      const params = new URLSearchParams();
+      params.append("image", cleanBase64);
+      if (name) {
+        params.append("name", name);
+      }
+
+      const imgbbRes = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+      });
+
+      const data: any = await imgbbRes.json();
+      if (!imgbbRes.ok || !data.success) {
+        return res.status(imgbbRes.status || 500).json({
+          error: data?.error?.message || "ImgBB upload mislukt",
+          details: data,
+        });
+      }
+
+      return res.json({
+        success: true,
+        url: data.data.url,
+        displayUrl: data.data.display_url,
+        thumbUrl: data.data.thumb?.url,
+        deleteUrl: data.data.delete_url,
+      });
+    } catch (err: any) {
+      console.error("Fout bij server-side ImgBB upload:", err);
+      return res.status(500).json({ error: "Upload mislukt", details: err.message });
+    }
+  });
 
   app.get("/api/session-music/:sessionId", (req, res) => {
     const { sessionId } = req.params;
@@ -209,6 +256,12 @@ async function startServer() {
       res.status(500).json({ error: "Supabase Proxy Failed", details: err.message });
     }
   });
+
+  // Serve uploads directly (with Range support for video streaming)
+  const uploadsDir = path.join(process.cwd(), "public", "uploads");
+  if (fs.existsSync(uploadsDir)) {
+    app.use("/uploads", express.static(uploadsDir));
+  }
 
   // Vite integration
   if (process.env.NODE_ENV !== "production") {
