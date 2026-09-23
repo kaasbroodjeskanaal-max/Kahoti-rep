@@ -84,49 +84,79 @@ async function startServer() {
   // In-memory store for session music URLs
   const sessionMusicStore: Record<string, string> = {};
 
-  // ImgBB Image Upload API Proxy
-  app.post("/api/upload-image", async (req, res) => {
+  // Image Upload API routes - saves directly to public/uploads
+  app.options(["/api/upload-image", "/upload-image", "/api/upload", "/upload"], (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.sendStatus(204);
+  });
+
+  app.get(["/api/upload-image", "/upload-image", "/api/upload", "/upload"], (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    return res.json({ status: "ready", endpoint: "/api/upload-image", method: "POST" });
+  });
+
+  app.post(["/api/upload-image", "/upload-image", "/api/upload", "/upload"], async (req, res) => {
     try {
       const { image, name } = req.body || {};
       if (!image) {
         return res.status(400).json({ error: "Geen afbeelding meegegeven" });
       }
 
-      const apiKey = process.env.IMGBB_API_KEY || "696dd307262986c0058019dd5f7906a5";
-      const cleanBase64 = typeof image === "string" ? image.replace(/^data:image\/\w+;base64,/, "") : image;
-
-      const params = new URLSearchParams();
-      params.append("image", cleanBase64);
-      if (name) {
-        params.append("name", name);
+      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      const imgbbRes = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: params.toString(),
-      });
-
-      const data: any = await imgbbRes.json();
-      if (!imgbbRes.ok || !data.success) {
-        return res.status(imgbbRes.status || 500).json({
-          error: data?.error?.message || "ImgBB upload mislukt",
-          details: data,
-        });
+      // Detect format and clean base64
+      let ext = "png";
+      let base64Data = typeof image === "string" ? image : "";
+      const dataUrlMatch = base64Data.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      if (dataUrlMatch) {
+        ext = dataUrlMatch[1].toLowerCase();
+        if (ext === "jpeg") ext = "jpg";
+        if (ext === "svg+xml") ext = "svg";
+        base64Data = dataUrlMatch[2];
+      } else {
+        base64Data = base64Data.replace(/^data:image\/\w+;base64,/, "");
       }
 
+      const buffer = Buffer.from(base64Data, "base64");
+
+      // Auto-detect extension from magic bytes if not in data URL
+      if (!dataUrlMatch && buffer.length > 4) {
+        if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+          ext = "png";
+        } else if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+          ext = "jpg";
+        } else if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) {
+          ext = "gif";
+        } else if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") {
+          ext = "webp";
+        }
+      }
+
+      const safeName = (name || "image").toString().replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+      const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const fileName = `${safeName}_${uniqueSuffix}.${ext}`;
+      const targetFilePath = path.join(uploadsDir, fileName);
+
+      fs.writeFileSync(targetFilePath, buffer);
+
+      const publicUrl = `/uploads/${fileName}`;
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
       return res.json({
         success: true,
-        url: data.data.url,
-        displayUrl: data.data.display_url,
-        thumbUrl: data.data.thumb?.url,
-        deleteUrl: data.data.delete_url,
+        url: publicUrl,
+        displayUrl: publicUrl,
+        thumbUrl: publicUrl,
+        filename: fileName,
       });
     } catch (err: any) {
-      console.error("Fout bij server-side ImgBB upload:", err);
-      return res.status(500).json({ error: "Upload mislukt", details: err.message });
+      console.error("Fout bij server-side image upload:", err);
+      return res.status(500).json({ error: "Upload mislukt", details: err?.message || String(err) });
     }
   });
 
