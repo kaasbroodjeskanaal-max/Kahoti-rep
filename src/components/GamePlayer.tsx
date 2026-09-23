@@ -73,6 +73,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   const [isIntroMuted, setIsIntroMuted] = useState(false);
   const introVideoRef = React.useRef<HTMLVideoElement | null>(null);
 
+  // States & Ref for outro video at the end of the quiz
+  const [isPlayerOutroMuted, setIsPlayerOutroMuted] = useState(false);
+  const playerOutroVideoRef = React.useRef<HTMLVideoElement | null>(null);
+
   useEffect(() => {
     if (!sessionId || session?.status !== "lobby") return;
 
@@ -472,10 +476,12 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
     };
   }, [sessionId, playerUid]);
 
-  // Reset hasWatchedIntro if returning to lobby
+  // Reset hasWatchedIntro if returning to lobby or transition to question when host starts question
   useEffect(() => {
     if (session?.status === "lobby") {
       setHasWatchedIntro(false);
+    } else if (session?.status === "question") {
+      setHasWatchedIntro(true);
     }
   }, [session?.status]);
 
@@ -503,6 +509,26 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
       return () => clearTimeout(fallbackTimer);
     }
   }, [session?.status, session?.currentQuestionIndex, hasWatchedIntro]);
+
+  // Autoplay outro video for players when quiz has ended
+  useEffect(() => {
+    if (session?.status === "ended") {
+      if (playerOutroVideoRef.current) {
+        playerOutroVideoRef.current.currentTime = 0;
+        const playPromise = playerOutroVideoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn("Autoplay outro audio blocked on player device, muting:", err);
+            if (playerOutroVideoRef.current) {
+              playerOutroVideoRef.current.muted = true;
+              setIsPlayerOutroMuted(true);
+              playerOutroVideoRef.current.play().catch(() => {});
+            }
+          });
+        }
+      }
+    }
+  }, [session?.status]);
 
   const toggleIntroAudio = () => {
     if (introVideoRef.current) {
@@ -1048,8 +1074,15 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   ref={introVideoRef}
                   autoPlay
                   playsInline
+                  disablePictureInPicture
                   onEnded={() => setHasWatchedIntro(true)}
-                  className="w-full h-full object-contain"
+                  onPause={(e) => {
+                    const v = e.currentTarget;
+                    if (!v.ended) {
+                      v.play().catch(() => {});
+                    }
+                  }}
+                  className="w-full h-full object-contain pointer-events-none select-none"
                 >
                   <source src="/uploads/intro_kahotie.mp4" type="video/mp4" />
                   <source src="/uploads/Intro%20kahotie.mp4" type="video/mp4" />
@@ -1066,13 +1099,9 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   {isIntroMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
                   <span>{isIntroMuted ? "Geluid aan" : "Geluid dempen"}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setHasWatchedIntro(true)}
-                  className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
-                >
-                  Overslaan →
-                </button>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Speelt automatisch af
+                </span>
               </div>
             </motion.div>
           ) : session?.status === "countdown" ? (
@@ -2141,16 +2170,42 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                   </div>
                   <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 flex items-center justify-center shadow-inner">
                     <video
+                      ref={playerOutroVideoRef}
                       src="/uploads/IMG_6220.MP4"
-                      controls
                       playsInline
                       autoPlay
-                      className="w-full h-full object-contain"
+                      disablePictureInPicture
+                      onPause={(e) => {
+                        const v = e.currentTarget;
+                        if (!v.ended) {
+                          v.play().catch(() => {});
+                        }
+                      }}
+                      className="w-full h-full object-contain pointer-events-none select-none"
                     >
                       <source src="/uploads/IMG_6220.MP4" type="video/mp4" />
                       <source src="/uploads/IMG_6220.mp4" type="video/mp4" />
                       Jouw browser ondersteunt deze video niet.
                     </video>
+                  </div>
+                  <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (playerOutroVideoRef.current) {
+                          const nextMuted = !playerOutroVideoRef.current.muted;
+                          playerOutroVideoRef.current.muted = nextMuted;
+                          setIsPlayerOutroMuted(nextMuted);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-full border border-slate-700 cursor-pointer transition font-medium text-xs shadow-sm"
+                    >
+                      {isPlayerOutroMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+                      <span>{isPlayerOutroMuted ? "Geluid aanzetten" : "Geluid dempen"}</span>
+                    </button>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Speelt automatisch af
+                    </span>
                   </div>
                   <p className="text-[11px] text-slate-400 text-center font-medium">
                     Bedankt voor het spelen van de quiz!

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download, Flame, Crown, Medal, PartyPopper, BarChart3, Zap, Dices, Snowflake, Sun, Palmtree, Ghost, Music, Gamepad2, ListOrdered, Search } from "lucide-react";
+import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download, Flame, Crown, Medal, PartyPopper, BarChart3, Zap, Dices, Snowflake, Sun, Palmtree, Ghost, Music, Gamepad2, ListOrdered, Search, Volume2, VolumeX } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
@@ -51,6 +51,12 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   const introCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingSessionAndPlayersRef = useRef(false);
   const initialFetchDoneRef = useRef(false);
+
+  // States & refs for automatic un-pausable video playback (intro & slotvideo)
+  const hostIntroVideoRef = useRef<HTMLVideoElement | null>(null);
+  const hostOutroVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [isHostIntroMuted, setIsHostIntroMuted] = useState(false);
+  const [isHostOutroMuted, setIsHostOutroMuted] = useState(false);
 
   // States & ref for background lobby music
   const [selectedLobbyMusicUrl, setSelectedLobbyMusicUrl] = useState(() => {
@@ -1457,9 +1463,17 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                     <div className="w-full max-w-2xl mx-auto space-y-4 animate-fade-in px-4">
                       <div className="relative aspect-video rounded-3xl overflow-hidden bg-black border-2 border-indigo-500/50 shadow-2xl">
                         <video
+                          ref={hostIntroVideoRef}
                           autoPlay
                           playsInline
-                          className="w-full h-full object-contain"
+                          disablePictureInPicture
+                          onPause={(e) => {
+                            const v = e.currentTarget;
+                            if (!v.ended) {
+                              v.play().catch(() => {});
+                            }
+                          }}
+                          className="w-full h-full object-contain pointer-events-none select-none"
                         >
                           <source src="/uploads/intro_kahotie.mp4" type="video/mp4" />
                           <source src="/uploads/Intro%20kahotie.mp4" type="video/mp4" />
@@ -1467,9 +1481,25 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                         </video>
                       </div>
                       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-2 text-xs text-slate-400">
-                        <span className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono">
-                          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" /> Quiz start video speelt af op alle toestellen...
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1.5 text-indigo-400 font-bold font-mono">
+                            <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" /> Quiz start video speelt af op alle toestellen...
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (hostIntroVideoRef.current) {
+                                const nextMuted = !hostIntroVideoRef.current.muted;
+                                hostIntroVideoRef.current.muted = nextMuted;
+                                setIsHostIntroMuted(nextMuted);
+                              }
+                            }}
+                            className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg border border-slate-700 cursor-pointer font-medium text-xs shadow-sm transition"
+                          >
+                            {isHostIntroMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+                            <span>{isHostIntroMuted ? "Geluid aan" : "Geluid dempen"}</span>
+                          </button>
+                        </div>
                         <button
                           onClick={handleSkipIntro}
                           className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer font-bold transition flex items-center gap-1"
@@ -2433,16 +2463,42 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                                   </div>
                                   <div className="relative rounded-xl overflow-hidden bg-black aspect-video border border-slate-800 shadow-inner flex items-center justify-center">
                                     <video
+                                      ref={hostOutroVideoRef}
                                       src="/uploads/IMG_6220.MP4"
-                                      controls
                                       playsInline
                                       autoPlay
-                                      className="w-full h-full object-contain"
+                                      disablePictureInPicture
+                                      onPause={(e) => {
+                                        const v = e.currentTarget;
+                                        if (!v.ended) {
+                                          v.play().catch(() => {});
+                                        }
+                                      }}
+                                      className="w-full h-full object-contain pointer-events-none select-none"
                                     >
                                       <source src="/uploads/IMG_6220.MP4" type="video/mp4" />
                                       <source src="/uploads/IMG_6220.mp4" type="video/mp4" />
                                       Je browser ondersteunt deze video niet.
                                     </video>
+                                  </div>
+                                  <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (hostOutroVideoRef.current) {
+                                          const nextMuted = !hostOutroVideoRef.current.muted;
+                                          hostOutroVideoRef.current.muted = nextMuted;
+                                          setIsHostOutroMuted(nextMuted);
+                                        }
+                                      }}
+                                      className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 cursor-pointer transition font-medium text-xs shadow-sm"
+                                    >
+                                      {isHostOutroMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+                                      <span>{isHostOutroMuted ? "Geluid aanzetten" : "Geluid dempen"}</span>
+                                    </button>
+                                    <span className="text-[11px] text-slate-400 font-mono">
+                                      Speelt automatisch af
+                                    </span>
                                   </div>
                                   <p className="text-xs text-slate-400">
                                     Bedankt aan alle deelnemers voor een geweldige quizronde!
