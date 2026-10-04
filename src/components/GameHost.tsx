@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { Quiz, GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
-import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download, Flame, Crown, Medal, PartyPopper, BarChart3, Zap, Dices, Snowflake, Sun, Palmtree, Ghost, Music, Gamepad2, ListOrdered, Search, Volume2, VolumeX } from "lucide-react";
+import { Users, Play, Award, ArrowRight, RefreshCw, LogOut, Check, Clock, Sparkles, Trophy, Lock, Unlock, X, Sliders, Download, Flame, Crown, Medal, PartyPopper, BarChart3, Zap, Dices, Snowflake, Sun, Palmtree, Ghost, Music, Gamepad2, ListOrdered, Search, Volume2, VolumeX, Bell } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
+import SnowEffect from "./SnowEffect";
 import { parseNicknameAndAvatar, parseQuizTitle, ShapeIcon } from "../avatarUtils";
 import { translations } from "../translations";
 import { sfx } from "../soundManager";
@@ -1147,18 +1148,19 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
   return (
     <div className={`min-h-screen ${activeTheme.bgClasses} font-sans flex flex-col justify-between transition-all duration-700 relative`}>
       {/* Decorative background overlays for themes */}
-      {activeTheme.name !== "Standaard" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
-          {activeTheme.name === "Winter" && (
-            <>
-              <div className="absolute top-[10%] left-[15%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
-              <div className="absolute top-[35%] left-[85%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
-              <div className="absolute top-[75%] left-[8%] text-indigo-200/40 animate-bounce"><Snowflake className="w-12 h-12" /></div>
-              <div className="absolute top-[18%] left-[55%] text-indigo-200/40 animate-bounce"><Snowflake className="w-6 h-6" /></div>
-              <div className="absolute top-[65%] left-[70%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
-            </>
-          )}
-          {activeTheme.name === "Zomer" && (
+      <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
+        {(activeTheme.name.includes("Kerst") || activeTheme.name === "Winter" || activeTheme.name.includes("Christmas") || activeTheme.name === "Kerstmis Event 🎄") && (
+          <>
+            <SnowEffect count={35} />
+            <div className="absolute top-[8%] left-[12%] text-amber-300/40 animate-pulse text-2xl">⭐</div>
+            <div className="absolute top-[25%] left-[88%] text-red-400/40 animate-bounce text-2xl">🎄</div>
+            <div className="absolute top-[75%] left-[6%] text-emerald-400/40 animate-pulse text-2xl">🎁</div>
+            <div className="absolute top-[68%] left-[80%] text-amber-200/40 animate-pulse text-2xl">⭐</div>
+            <div className="absolute top-[10%] left-[15%] text-indigo-200/30 animate-bounce"><Snowflake className="w-10 h-10" /></div>
+            <div className="absolute top-[35%] left-[85%] text-indigo-200/30 animate-bounce"><Snowflake className="w-8 h-8" /></div>
+          </>
+        )}
+        {activeTheme.name === "Zomer" && (
             <>
               <div className="absolute top-[8%] left-[22%] text-amber-300/40 animate-spin duration-10000"><Sun className="w-12 h-12" /></div>
               <div className="absolute top-[20%] left-[80%] text-emerald-400/40 animate-pulse"><Palmtree className="w-12 h-12" /></div>
@@ -1190,7 +1192,6 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
             </>
           )}
         </div>
-      )}
 
       {isInitializing ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8">
@@ -1321,7 +1322,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
                       <button
                         onClick={() => changeLobbyMusic("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3")}
                         className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
@@ -1330,7 +1331,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
                         }`}
                       >
-                        <span>Soundtrack 1 (Mellow)</span>
+                        <span>Muziek 1 (Mellow)</span>
                         {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
                       </button>
 
@@ -1342,7 +1343,7 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
                         }`}
                       >
-                        <span>Soundtrack 2 (Retro)</span>
+                        <span>Muziek 2 (Retro)</span>
                         {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202726000-2c24a69f-3877-4838-a150-058ac0110f43.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
                       </button>
 
@@ -1354,16 +1355,27 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
                         }`}
                       >
-                        <span>Soundtrack 3 (Upbeat)</span>
+                        <span>Muziek 3 (Upbeat)</span>
                         {selectedLobbyMusicUrl === "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3" && <span className="text-[10px] bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          sfx.playJingleBells();
+                        }}
+                        className="px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer bg-red-950/60 hover:bg-red-900/70 text-amber-300 border-red-800/60 shadow-sm"
+                        title="Speel vrolijke Jingle Bells melodie voor de groep"
+                      >
+                        <span className="flex items-center gap-1.5"><Bell className="w-3.5 h-3.5 text-amber-400 animate-bounce" /> Jingle Bells 🔔</span>
+                        <span className="text-[10px] bg-red-900/70 text-amber-200 px-2 py-0.5 rounded-full font-bold">Kerst 🎄</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Joined Player Centered Flow */}
-                  <div className="bg-slate-950/40 border border-slate-800/60 rounded-3xl p-6 md:p-8 min-h-[250px]">
-                    <h3 className="text-slate-400 text-sm font-semibold mb-6 flex items-center gap-2 justify-center">
-                      <Users className="w-4 h-4 text-indigo-400" /> DEELNEMERS ({players.length})
+                  <div className="bg-slate-950/60 border border-red-900/40 rounded-3xl p-6 md:p-8 min-h-[250px] shadow-xl">
+                    <h3 className="text-amber-300 text-sm font-semibold mb-6 flex items-center gap-2 justify-center tracking-wide">
+                      <Users className="w-4 h-4 text-emerald-400" /> 🎄 KERSTMIS DEELNEMERS ({players.length}) 🎅
                     </h3>
                     {players.length === 0 ? (
                       <div className="text-slate-500 italic py-12">Wacht op spelers...</div>
@@ -1377,11 +1389,11 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: idx * 0.04 }}
-                            className="group bg-slate-900 border border-slate-800 px-4 py-2.5 rounded-2xl text-white font-bold font-display flex items-center gap-3 shadow-md hover:border-red-500/50 transition-colors duration-200 min-w-[180px] max-w-[240px] relative overflow-hidden"
+                            className="group bg-slate-900/90 border border-slate-700/60 hover:border-purple-500/50 px-3.5 py-2 rounded-2xl text-white font-bold font-display flex items-center gap-3 shadow-lg hover:shadow-purple-500/10 transition-all duration-200 min-w-[190px] max-w-[260px] relative overflow-hidden backdrop-blur-xs"
                           >
-                            <img src={avatarUrl} alt="avatar" className="w-9 h-9 rounded-full border border-slate-700 bg-slate-800 shrink-0" />
-                            <div className="flex items-center gap-1 min-w-0 flex-1 z-10">
-                              <span className="truncate text-sm text-left text-slate-100">{displayName}</span>
+                            <img src={avatarUrl} alt="avatar" className="w-10 h-10 rounded-full border-2 border-slate-600/80 bg-slate-800 shrink-0 shadow-sm object-cover" />
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1 z-10">
+                              <span className="truncate text-sm text-left text-slate-100 font-extrabold">{displayName}</span>
                               {isVerified && (
                                 <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
                                   ✓

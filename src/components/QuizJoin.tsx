@@ -1,11 +1,29 @@
 import React, { useState } from "react";
 import { supabase } from "../supabase";
-import { ArrowLeft, Loader2, Play, RefreshCw, Sparkles, Sliders, Palette } from "lucide-react";
+import { ArrowLeft, Loader2, Play, RefreshCw, Sparkles, Sliders, Palette, Dices, ClipboardPaste, Settings2, Shuffle, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import confetti from "canvas-confetti";
-import { AVATAR_BASES, AVATAR_HATS, AVATAR_ACCESSORIES, AVATAR_GRADIENTS, parseNicknameAndAvatar, getAvatarUrl, parseQuizTitle } from "../avatarUtils";
+import SnowEffect from "./SnowEffect";
+import {
+  AVATAR_BASES,
+  AVATAR_HATS,
+  AVATAR_ACCESSORIES,
+  AVATAR_GRADIENTS,
+  AVATAR_PRESETS,
+  AvatarPreset,
+  getRandomFunNickname,
+  parseNicknameAndAvatar,
+  getAvatarUrl,
+  parseQuizTitle,
+  DICEBEAR_STYLES,
+  DICEBEAR_BACKGROUNDS,
+  DICEBEAR_POPULAR_SEEDS,
+  getDiceBearAvatarUrl,
+  getRandomDiceBearConfig
+} from "../avatarUtils";
 import { translations } from "../translations";
 import { sfx } from "../soundManager";
+
 
 // Fun Dutch character personality tags to make customization incredibly delightful!
 export const BASE_DESCRIPTIONS: Record<string, string> = {
@@ -34,6 +52,68 @@ export const BASE_DESCRIPTIONS: Record<string, string> = {
   hamburger: "De Snack-Kampioen: Eet quizvragen als ontbijt! 🍔",
   rose: "De Elegante Bloesem: Prachtige stijl, vlijmscherpe geest! 🌹",
   turtle: "De Rustige Strategist: Langzaam maar zeker naar de top! 🐢",
+  cheese: "De Ware Kaasbaas: Goudgeel en altijd de slimste! 🧀",
+  fox: "De Slimme Vos: Vlijmscherp en altijd de concurrentie te slim af! 🦊",
+  bear: "De Knuffelbeer: Zacht van buiten, oersterk in scores! 🐻",
+  bunny: "De Turbo Haas: Sneller op de knop dan wie dan ook! 🐰",
+  tiger: "De Quiz Tijger: Klauwt zich direct naar plek 1! 🐯",
+  dog: "De Trouwe Vriend: Laat nooit een vraag onbeantwoord! 🐶",
+  wolf: "De Alfa Wolf: Leidt de roedel met scherpe intelligentie! 🐺",
+  koala: "De Relaxte Koala: Rustig, vriendelijk en super slim! 🐨",
+  frog: "De Wonder Kikker: Springt vrolijk over elke hindernis! 🐸",
+  octopus: "Het Meesterbrein: Acht tentakels om tegelijk te antwoorden! 🐙",
+  dolphin: "De Speelse Dolfijn: Zwemt moeiteloos door alle quizzen! 🐬",
+  shark: "De Vlijmscherpe Haai: Ruikt direct de juiste antwoorden! 🦈",
+  owl: "De Wijze Uil: Ziet alles en weet altijd raad! 🦉",
+  butterfly: "De Fladderende Schoonheid: Brengt vrolijkheid in de game! 🦋",
+  bee: "De Bezige Bij: Altijd hard aan het werk voor punten! 🐝",
+  flamingo: "De Elegante Flamingo: Staat stevig op één poot aan de top! 🦩",
+  hedgehog: "De Slimme Egel: Scherp van geest en altijd beschermd! 🦔",
+  giraffe: "De Hoge Uitkijk: Ziet de overwinning al van ver aankomen! 🦒",
+  duck: "De Snelle Woerd: Altijd in zijn element op het water! 🦆",
+  crab: "De Zijwaartse Strateeg: Pakt alle punten razendsnel mee! 🦀",
+  peacock: "De Trotse Pauw: Schittert met een prachtige score! 🦚",
+  fries: "De Knapperige Snack: Altijd goudbruin en onweerstaanbaar! 🍟",
+  taco: "De Pittige Taco: Gevuld met knapperige kennis! 🌮",
+  popcorn: "De Popcorn Koning: Popt direct naar de nummer 1 positie! 🍿",
+  icecream: "Het Koele IJsje: Smelt nooit onder spanning! 🍦",
+  watermelon: "De Frisse Schijf: Vol verfrissende ideeën! 🍉",
+  strawberry: "De Zoete Aardbei: Altijd een feestje in de lobby! 🍓",
+  chocolate: "De Pure Genieter: Geeft instant hersenenergie! 🍫",
+  pancake: "De Gestreken Flens: Stapelt de punten torenhoog op! 🥞",
+  sushi: "De Rol Meester: Perfect gerold en vlijmscherp van smaak! 🍣",
+  pretzel: "De Gouden Knoop: Geen enkele vraag brengt hem in de knoop! 🥨",
+  cupcake: "Het Zoete Gebakje: Versierd met gouden sterren! 🧁",
+  hotdog: "De Snelle Snack: Gaat erin als koek! 🌭",
+  pineapple: "De Tropische Koning: Draagt altijd een gouden kroontje! 🍍",
+  croissant: "De Franse Meester: Flinterdunne laagjes vol wijsheid! 🥐",
+  gamepad: "De Hardcore Gamer: Kent alle cheatcodes van het leven! 🎮",
+  joystick: "De Retro Legende: Maximale controle over elke ronde! 🕹️",
+  basketball: "De Dunk Koning: Raakt elk antwoord loepzuiver! 🏀",
+  tennis: "De Acespecialist: Slaat elke moeilijke vraag terug! 🎾",
+  skateboard: "De Coole Skater: Doet een kickflip naar plek 1! 🛹",
+  racecar: "De Flitsende Coureur: Raast met topsnelheid over de finish! 🏎️",
+  rocket: "De Kosmische Astronaut: Schiet naar ongekende hoogtes! 🚀",
+  trophy_base: "De Geboren Kampioen: Schittert met puur goud! 🏆",
+  boxing: "De Knock-out Specialist: Slaat de concurrentie knock-out! 🥊",
+  target: "De Scherpschutter: Schiet altijd pal in de roos! 🎯",
+  dice_base: "Het Gelukskind: Gooit altijd een dubbele zes! 🎲",
+  guitar: "De Rockster: Speelt de sterren van de hemel! 🎸",
+  ufo: "Het Buitenaardse Wonder: Kennis uit verre melkwegstelsels! 🛸",
+  fire_base: "Het Vuurvlammetje: Brandt van verlangen om te winnen! 🔥",
+  diamond_base: "Het Fonkelende Juweel: Keihard en onverwoestbaar slim! 💎",
+  crystal_ball: "De Waarzegger: Weet de antwoorden al voor ze gesteld zijn! 🔮",
+  rainbow: "De Kleurenpracht: Brengt zonneschijn na elke regenronde! 🌈",
+  clover: "Het Klavertje Vier: Heeft altijd het geluk aan zijn zijde! 🍀",
+  crown_base: "De Hoogheid: Regeert met wijsheid over het scorebord! 👑",
+  boom: "De Dynamiet Knal: Explodeert van pure quizkennis! 💥",
+  sun: "Het Zonnetje: Verlicht de hele spelerslijst! ☀️",
+  moon: "De Nachtbraker: Ziet alles in het donker! 🌙",
+  palette: "De Kunstenaar: Kleurt het spelveld met prachtige scores! 🎨",
+  wand_base: "De Tovenaar: Tovert het ene na het andere goede antwoord tevoorschijn! 🪄",
+  pumpkin: "Het Griezel Genie: Laat de tegenstanders bibberen! 🎃",
+  skull: "De Onverschrokkene: nergens bang voor in de arena! 💀",
+  pixel_monster: "Het 8-Bit Mysterie: Speelt het hele spel uit! 👾",
 };
 
 interface QuizJoinProps {
@@ -51,14 +131,28 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
   const [isLoading, setIsLoading] = useState(false);
   const [targetSessionId, setTargetSessionId] = useState("");
 
-  // Avatar customization states
-  const [baseIdx, setBaseIdx] = useState(0);
-  const [hatIdx, setHatIdx] = useState(0);
-  const [accIdx, setAccIdx] = useState(0);
-  const [gradIdx, setGradIdx] = useState(0);
-  const [avatarTab, setAvatarTab] = useState<"base" | "hat" | "acc" | "bg" | "style">("base");
+  // Avatar mode: "dicebear" (recommended, easy & beautiful!) or "emoji"
+  const [avatarMode, setAvatarMode] = useState<"dicebear" | "emoji">("dicebear");
 
-  // Advanced nudge/position adjustments
+  // DiceBear customization states
+  const [dbStyle, setDbStyle] = useState<string>("bottts");
+  const [dbSeed, setDbSeed] = useState<string>("Sparky");
+  const [dbBg, setDbBg] = useState<string>("b6e3f4");
+  const [customSeeds, setCustomSeeds] = useState<{ seed: string; name: string }[]>(
+    DICEBEAR_POPULAR_SEEDS["bottts"] || []
+  );
+
+  // Avatar customization states (Emoji)
+  const [baseIdx, setBaseIdx] = useState(5);
+  const [hatIdx, setHatIdx] = useState(1);
+  const [accIdx, setAccIdx] = useState(0);
+  const [gradIdx, setGradIdx] = useState(8);
+  const [avatarTab, setAvatarTab] = useState<"characters" | "customize">("characters");
+  const [activeCategory, setActiveCategory] = useState<"all" | "animals" | "scifi" | "food" | "heroes">("all");
+  const [activePresetId, setActivePresetId] = useState<string | null>("king_lion");
+  const [customBaseCategory, setCustomBaseCategory] = useState<"all" | "animals" | "food" | "gaming" | "magic">("all");
+
+  // Keep compatibility for nickname encoding
   const [customHatX, setCustomHatX] = useState(0);
   const [customHatY, setCustomHatY] = useState(0);
   const [customHatSize, setCustomHatSize] = useState(0);
@@ -68,68 +162,105 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
 
   // Reaction triggering states
   const [reactKey, setReactKey] = useState(0);
-  const [isSpinning, setIsSpinning] = useState(false);
 
   const triggerReaction = () => {
     setReactKey((prev) => prev + 1);
   };
 
-  const startMysterySpin = () => {
-    if (isSpinning) return;
-    setIsSpinning(true);
-    let duration = 0;
-    const intervalTime = 60;
-    const maxSteps = 12;
-    let stepCount = 0;
-
-    const interval = setInterval(() => {
-      setBaseIdx(Math.floor(Math.random() * AVATAR_BASES.length));
-      setHatIdx(Math.floor(Math.random() * AVATAR_HATS.length));
-      setAccIdx(Math.floor(Math.random() * AVATAR_ACCESSORIES.length));
-      setGradIdx(Math.floor(Math.random() * AVATAR_GRADIENTS.length));
-      
-      // Keep offsets clean during spin
-      setCustomHatX(0);
-      setCustomHatY(0);
-      setCustomHatSize(0);
-      setCustomAccX(0);
-      setCustomAccY(0);
-      setCustomAccSize(0);
-
-      triggerReaction();
-      stepCount++;
-
-      if (stepCount >= maxSteps) {
-        clearInterval(interval);
-        setIsSpinning(false);
-        // Play final sparkling burst on success
-        confetti({
-          particleCount: 22,
-          spread: 35,
-          origin: { y: 0.55 },
-          colors: ["#6366f1", "#f43f5e", "#10b981", "#fbbf24"],
-          disableForReducedMotion: true,
-        });
+  const handleSelectDiceBearStyle = (styleId: string) => {
+    setDbStyle(styleId);
+    const styleObj = DICEBEAR_STYLES.find((s) => s.id === styleId);
+    if (styleObj?.defaultBg) {
+      setDbBg(styleObj.defaultBg);
+    }
+    const seeds = DICEBEAR_POPULAR_SEEDS[styleId] || [];
+    setCustomSeeds(seeds);
+    if (seeds.length > 0) {
+      setDbSeed(seeds[0].seed);
+      if (!nickname.trim() || nickname.startsWith("Speler") || nickname.startsWith("Player")) {
+        setNickname(seeds[0].name + Math.floor(Math.random() * 89 + 10));
       }
-    }, intervalTime);
+    }
+    sfx.playSelectAnswer();
+    triggerReaction();
   };
 
-  const randomizeAvatar = () => {
-    setBaseIdx(Math.floor(Math.random() * AVATAR_BASES.length));
-    setHatIdx(Math.floor(Math.random() * AVATAR_HATS.length));
-    setAccIdx(Math.floor(Math.random() * AVATAR_ACCESSORIES.length));
-    setGradIdx(Math.floor(Math.random() * AVATAR_GRADIENTS.length));
-    
-    // Clear offsets on quick random
+  const shuffleStyleSeeds = () => {
+    const prefixes = ["Spark", "Nova", "Leo", "Max", "Zoe", "Sam", "Kai", "Luna", "Ace", "Pixel", "Rex", "Bolt", "Blitz", "Glow", "Fox", "Echo"];
+    const newBatch = Array.from({ length: 12 }, () => {
+      const p = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const num = Math.floor(Math.random() * 900 + 100);
+      return { seed: `${p}_${num}`, name: `${p}${num}` };
+    });
+    setCustomSeeds(newBatch);
+    sfx.playSelectAnswer();
+    triggerReaction();
+  };
+
+  const applyPreset = (p: AvatarPreset) => {
+    setAvatarMode("emoji");
+    setActivePresetId(p.id);
+    setBaseIdx(p.baseIdx);
+    setHatIdx(p.hatIdx);
+    setAccIdx(p.accIdx);
+    setGradIdx(p.gradIdx);
     setCustomHatX(0);
     setCustomHatY(0);
     setCustomHatSize(0);
     setCustomAccX(0);
     setCustomAccY(0);
     setCustomAccSize(0);
-
+    if (!nickname.trim() || nickname.startsWith("Speler") || nickname.startsWith("Player") || AVATAR_PRESETS.some(prev => nickname.startsWith(prev.suggestedName))) {
+      setNickname(p.suggestedName);
+    }
+    sfx.playSelectAnswer();
     triggerReaction();
   };
+
+  const handleRandomNickname = () => {
+    const funName = getRandomFunNickname();
+    setNickname(funName);
+    sfx.playSelectAnswer();
+    triggerReaction();
+  };
+
+  const handlePasteCode = async () => {
+    try {
+      const clipText = await navigator.clipboard.readText();
+      const cleanDigits = clipText.replace(/\D/g, "").slice(0, 6);
+      if (cleanDigits) {
+        setCode(cleanDigits);
+        sfx.playSelectAnswer();
+      }
+    } catch {
+      // Ignore if clipboard access is denied
+    }
+  };
+
+  const randomizeAvatar = () => {
+    if (avatarMode === "dicebear") {
+      const conf = getRandomDiceBearConfig();
+      setDbStyle(conf.style);
+      setDbSeed(conf.seed);
+      setDbBg(conf.bg);
+      setCustomSeeds(DICEBEAR_POPULAR_SEEDS[conf.style] || []);
+      setNickname(conf.suggestedName);
+    } else {
+      const randomPreset = AVATAR_PRESETS[Math.floor(Math.random() * AVATAR_PRESETS.length)];
+      applyPreset(randomPreset);
+      setNickname(randomPreset.suggestedName + Math.floor(Math.random() * 89 + 10));
+    }
+    confetti({
+      particleCount: 30,
+      spread: 60,
+      origin: { y: 0.45 },
+      colors: ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b"],
+      disableForReducedMotion: true,
+    });
+    sfx.playSelectAnswer();
+    triggerReaction();
+  };
+
 
   const [playerUid, setPlayerUid] = useState<string>("");
   const [isMarko, setIsMarko] = useState(false);
@@ -170,7 +301,9 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
 
     const currentName = nickname.trim() || "Kiezen...";
     const nameWithTag = isMarko ? `${currentName}__verified__` : currentName;
-    const combinedNickname = `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
+    const combinedNickname = avatarMode === "dicebear"
+      ? `${nameWithTag}:::db:${dbStyle}:${dbSeed}:${dbBg}`
+      : `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
 
     const timer = setTimeout(async () => {
       try {
@@ -193,7 +326,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
     }, 400); // 400ms debounce to prevent spamming database on rapid typing/clicking
 
     return () => clearTimeout(timer);
-  }, [step, targetSessionId, nickname, baseIdx, hatIdx, accIdx, gradIdx, playerUid, isMarko]);
+  }, [step, targetSessionId, nickname, avatarMode, dbStyle, dbSeed, dbBg, baseIdx, hatIdx, accIdx, gradIdx, playerUid, isMarko]);
 
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,6 +401,14 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       }
 
       setTargetSessionId(sessionData.id);
+      if (!nickname.trim()) {
+        const conf = getRandomDiceBearConfig();
+        setDbStyle(conf.style);
+        setDbSeed(conf.seed);
+        setDbBg(conf.bg);
+        setCustomSeeds(DICEBEAR_POPULAR_SEEDS[conf.style] || []);
+        setNickname(conf.suggestedName);
+      }
       setStep("nickname");
     } catch (err: any) {
       console.error(err);
@@ -301,7 +442,9 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       // Create/Upsert player record in players table
       const currentName = nickname.trim();
       const nameWithTag = isMarko ? `${currentName}__verified__` : currentName;
-      const combinedNickname = `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
+      const combinedNickname = avatarMode === "dicebear"
+        ? `${nameWithTag}:::db:${dbStyle}:${dbSeed}:${dbBg}`
+        : `${nameWithTag}:::${baseIdx}|${hatIdx}|${accIdx}|${gradIdx}|${customHatX}|${customHatY}|${customHatSize}|${customAccX}|${customAccY}|${customAccSize}`;
 
       // Clean up previous double entries with the same name in this session to prevent doubles
       const { data: existingSameNamePlayers } = await supabase
@@ -354,22 +497,30 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
   };
 
   return (
-    <div className="w-full max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center min-h-[75vh] relative z-10 w-full animate-fade-in">
-      {/* Decorative Brand with Logo */}
-      <div className="relative mb-8 flex justify-center mt-6">
-        <div className="absolute inset-0 bg-purple-500/30 blur-3xl rounded-full scale-125 animate-pulse" style={{ animationDuration: '4s' }} />
-        <div className="relative w-32 h-32 bg-gradient-to-tr from-purple-600 to-fuchsia-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-purple-600/30 border-4 border-white dark:border-[#0c0d12] transform -rotate-6 hover:rotate-0 hover:scale-105 transition-all duration-300">
-           <Sparkles className="w-14 h-14 text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]" />
+    <div className="w-full max-w-md mx-auto px-6 py-10 flex flex-col items-center justify-center min-h-[75vh] relative z-10 w-full animate-fade-in">
+      {/* Festive Falling Snow Effect */}
+      <SnowEffect count={25} />
+
+      {/* Christmas Event Pill Badge */}
+      <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-950/80 border border-red-800/60 text-amber-300 font-bold text-xs uppercase tracking-wider mb-4 shadow-sm backdrop-blur-md">
+        <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" /> 🎄 Kerstmis Event 2026 ❄️
+      </div>
+
+      {/* Decorative Brand with Festive Logo */}
+      <div className="relative mb-6 flex justify-center">
+        <div className="absolute inset-0 bg-red-600/25 blur-3xl rounded-full scale-125 animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="relative w-28 h-28 bg-gradient-to-tr from-red-600 via-rose-600 to-emerald-600 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-red-600/30 border-4 border-white/20 transform -rotate-3 hover:rotate-0 hover:scale-105 transition-all duration-300 text-5xl">
+          🎅
         </div>
       </div>
 
-      <h1 className="text-4xl md:text-5xl font-black font-display tracking-tight text-center mb-8 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-sm">
-        Kahoti-Rep Play
+      <h1 className="text-3xl md:text-4xl font-black font-display tracking-tight text-center mb-6 text-white drop-shadow-sm flex items-center justify-center gap-2">
+        Kahoti-Rep <span className="text-red-400">Kerst Play</span> 🎄
       </h1>
 
-      <div className="w-full bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] p-8 shadow-2xl shadow-purple-900/10 dark:shadow-purple-900/30 border border-slate-200/50 dark:border-slate-800/80 relative overflow-hidden">
-        {/* Decorative modern indicator bar */}
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-indigo-500" />
+      <div className="w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] p-8 shadow-2xl shadow-red-950/20 border border-red-900/30 relative overflow-hidden">
+        {/* Festive Christmas indicator bar */}
+        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-600 via-amber-400 to-emerald-600" />
 
         {step === "code" ? (
           /* STEP 1: ENTER CODE */
@@ -447,9 +598,21 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                 })}
               </div>
 
-              {/* Glowing decorative indicator underneath to guide look */}
-              <div className="flex justify-center mt-3 text-[11px] font-bold text-slate-400 dark:text-slate-500/70 tracking-widest uppercase pointer-events-none">
-                {lang === "nl" ? "Klik hierboven om te typen" : "Tap above to start typing"}
+              {/* Indicator underneath and quick paste button */}
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500/70 tracking-widest uppercase pointer-events-none">
+                  {lang === "nl" ? "Klik hierboven om te typen" : "Tap above to start typing"}
+                </span>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <button
+                  type="button"
+                  onClick={handlePasteCode}
+                  className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1 cursor-pointer transition py-0.5 px-2 rounded-md hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                  title="Plak code van klembord"
+                >
+                  <ClipboardPaste className="w-3.5 h-3.5" />
+                  <span>{t.pasteCode || "Plak code"}</span>
+                </button>
               </div>
             </div>
 
@@ -470,407 +633,591 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               <button
                 type="submit"
                 disabled={isLoading || code.length !== 6}
-                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-purple-600/20 dark:shadow-purple-900/40 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none uppercase tracking-widest text-xs"
+                className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 via-rose-600 to-emerald-600 hover:from-red-500 hover:to-emerald-500 text-white py-4 rounded-2xl font-black shadow-lg shadow-red-600/30 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none uppercase tracking-widest text-xs"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  lang === "nl" ? "Volgende 🚀" : "Next 🚀"
+                  lang === "nl" ? "Volgende 🎄" : "Next 🎄"
                 )}
               </button>
             </div>
           </form>
         ) : (
           /* STEP 2: CHOOSE NICKNAME & AVATAR */
-          <form onSubmit={handleJoinLobby} className="space-y-6">
+          <form onSubmit={handleJoinLobby} className="space-y-4">
+            {/* Header */}
             <div className="text-center">
-              <span className="inline-block px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-mono font-bold text-xs rounded-full mb-4 uppercase tracking-widest border border-purple-200/50 dark:border-purple-800/50">
-                {lang === "nl" ? "Lobby gevonden!" : "Lobby found!"}
+              <span className="inline-block px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-mono font-bold text-xs rounded-full mb-2 uppercase tracking-widest border border-emerald-200/60 dark:border-emerald-800/60">
+                ✓ {lang === "nl" ? "🎄 Kerstlobby gevonden! 🎅" : "🎄 Christmas Lobby Found! 🎅"}
               </span>
-              <h2 className="text-2xl font-bold font-display text-slate-800 dark:text-white mb-2">
-                {lang === "nl" ? "Avatar & Nickname" : "Avatar & Nickname"}
+              <h2 className="text-2xl font-black font-display text-slate-900 dark:text-white tracking-tight">
+                {t.chooseAvatar || "Kies je Karakter"} 🎭
               </h2>
-              <p className="text-gray-500 dark:text-slate-400 text-sm">
-                {lang === "nl" ? "Ontwerp je avatar en voer je spelersnaam in!" : "Design your avatar and enter your player name!"}
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-medium">
+                {lang === "nl" ? "Kies een feestelijk kerstkarakter of stel je eigen stijl samen!" : "Pick a festive Christmas character or customize your own look!"}
               </p>
             </div>
 
-            {/* Avatar Builder */}
-            <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 flex flex-col gap-4 animate-fade-in relative">
+            {/* Hero Card: Avatar Spotlight & Nickname */}
+            <div className="p-4 rounded-3xl bg-linear-to-b from-purple-500/10 via-slate-50 to-white dark:from-purple-950/40 dark:via-slate-900/90 dark:to-slate-900 border-2 border-purple-200/80 dark:border-purple-900/60 shadow-sm flex flex-col gap-3 relative overflow-hidden">
               
-              {/* Immersive Pod Showcase Zone */}
-              <div className="flex flex-col items-center p-5 bg-linear-to-b from-slate-900 via-slate-950 to-slate-900 rounded-2xl border border-slate-800 w-full relative overflow-hidden shadow-inner">
-                {/* Spotlight background radiation */}
-                <div className="absolute inset-0 bg-radial-to-t from-transparent via-transparent to-purple-500/10 opacity-60 pointer-events-none" />
-                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-40 h-45 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
-                
-                <div className="relative z-10 flex flex-col items-center">
-                  {/* Floating/Reactive Showcased Avatar */}
-                  <motion.div
-                    key={reactKey}
-                    animate={{
-                      y: [0, -6, 0],
-                      scale: [1, 1.15, 0.96, 1],
-                      rotate: [0, -3, 3, 0],
-                    }}
-                    transition={{
-                      y: {
-                        duration: 3,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      },
-                      scale: {
-                        duration: 0.35,
-                        ease: "easeOut"
-                      },
-                      rotate: {
-                        duration: 0.35,
-                        ease: "easeOut"
-                      }
-                    }}
-                    className="relative"
-                  >
-                    <img 
-                      src={getAvatarUrl(
-                        nickname, 
-                        baseIdx, 
-                        hatIdx, 
-                        accIdx, 
-                        gradIdx,
-                        customHatX,
-                        customHatY,
-                        customHatSize,
-                        customAccX,
-                        customAccY,
-                        customAccSize
-                      )} 
-                      alt="Jouw avatar" 
-                      className="w-24 h-24 rounded-full border-4 border-slate-800 shadow-xl bg-slate-950" 
-                    />
-                    
-                    {/* Active sparkle overlay */}
-                    {isSpinning && (
-                      <div className="absolute inset-0 bg-purple-500/20 rounded-full animate-ping pointer-events-none" />
-                    )}
-                  </motion.div>
-
-                  {/* Fun character details display */}
-                  <div className="mt-3 text-center space-y-1">
-                    <p className="font-black text-white text-base truncate max-w-[200px]">
-                      {nickname || "Kies een naam..."}
-                    </p>
-                    <span className="inline-flex px-2.5 py-0.5 bg-purple-500/10 text-purple-400 font-mono text-[9px] uppercase tracking-wider font-extrabold rounded-full border border-purple-500/20">
-                      {AVATAR_BASES[baseIdx]?.name.split(" ")[0]} ✦ {AVATAR_GRADIENTS[gradIdx]?.name}
-                    </span>
-                    <p className="text-[10px] text-slate-400 italic max-w-[260px] leading-relaxed select-none">
-                      {BASE_DESCRIPTIONS[AVATAR_BASES[baseIdx]?.id] || "Ontwerper van grappen en grollen!"}
-                    </p>
+              {/* Avatar Preview & Surprise Me button */}
+              <div className="flex items-center gap-3 w-full">
+                <motion.div
+                  key={reactKey}
+                  animate={{
+                    scale: [1, 1.15, 0.95, 1],
+                    rotate: [0, -4, 4, 0],
+                  }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  className="relative cursor-pointer group shrink-0"
+                  onClick={randomizeAvatar}
+                  title={lang === "nl" ? "Klik voor een verrassing!" : "Click for surprise!"}
+                >
+                  <img
+                    src={
+                      avatarMode === "dicebear"
+                        ? getDiceBearAvatarUrl(dbStyle, dbSeed, dbBg)
+                        : getAvatarUrl(nickname, baseIdx, hatIdx, accIdx, gradIdx, customHatX, customHatY, customHatSize, customAccX, customAccY, customAccSize)
+                    }
+                    alt="Avatar"
+                    className="w-20 h-20 sm:w-22 sm:h-22 rounded-full border-4 border-white dark:border-slate-800 shadow-xl bg-slate-900 transition-transform duration-200 group-hover:scale-105 object-cover"
+                  />
+                  <div className="absolute -bottom-1 -right-1 p-1 bg-purple-600 text-white rounded-full shadow-md border-2 border-white dark:border-slate-900">
+                    <Sparkles className="w-3.5 h-3.5" />
                   </div>
-                </div>
+                </motion.div>
 
-                {/* Slot-machine randomize trigger */}
-                <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-                  <motion.button
-                    whileTap={{ scale: 0.9 }}
-                    whileHover={{ scale: 1.05 }}
+                {/* Quick Surprise CTA & Fun Tagline */}
+                <div className="flex flex-col items-start gap-1.5 flex-1 min-w-0">
+                  <button
                     type="button"
-                    onClick={startMysterySpin}
-                    disabled={isSpinning}
-                    className="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded-xl shadow-lg border border-purple-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs font-bold"
-                    title="Mystery Spin"
+                    onClick={randomizeAvatar}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-md shadow-purple-600/20 active:scale-95 transition cursor-pointer"
                   >
-                    <Sparkles className={`w-3.5 h-3.5 text-yellow-300 ${isSpinning ? "animate-spin" : ""}`} />
-                    <span>Loot Spin</span>
-                  </motion.button>
+                    <Dices className="w-4 h-4" />
+                    <span>{t.surpriseMe || "Verras Me! 🎲"}</span>
+                  </button>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium line-clamp-2 italic leading-tight select-none">
+                    {avatarMode === "dicebear"
+                      ? `${DICEBEAR_STYLES.find((s) => s.id === dbStyle)?.emoji || "✨"} ${DICEBEAR_STYLES.find((s) => s.id === dbStyle)?.name || "Karakter"}: ${DICEBEAR_STYLES.find((s) => s.id === dbStyle)?.description || "Klaar voor de overwinning!"}`
+                      : (BASE_DESCRIPTIONS[AVATAR_BASES[baseIdx]?.id] || "Klaar voor de overwinning!")}
+                  </p>
                 </div>
               </div>
 
-              {/* Category Tab buttons */}
-              <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-none gap-2 pb-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setAvatarTab("base")}
-                  className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
-                    avatarTab === "base"
-                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
-                      : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
-                  }`}
-                >
-                  🌏 Basis
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAvatarTab("hat")}
-                  className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
-                    avatarTab === "hat"
-                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
-                      : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
-                  }`}
-                >
-                  👑 Muts
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAvatarTab("acc")}
-                  className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
-                    avatarTab === "acc"
-                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
-                      : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
-                  }`}
-                >
-                  🕶️ Extra
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAvatarTab("bg")}
-                  className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer ${
-                    avatarTab === "bg"
-                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
-                      : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
-                  }`}
-                >
-                  🎨 Kleur
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAvatarTab("style")}
-                  className={`px-3 pb-2 text-xs font-bold text-center border-b-2 transition shrink-0 cursor-pointer flex items-center gap-1 ${
-                    avatarTab === "style"
-                      ? "border-purple-600 text-purple-600 dark:text-purple-400 font-extrabold"
-                      : "border-transparent text-slate-400 hover:text-slate-655 dark:hover:text-slate-300"
-                  }`}
-                >
-                  🛠️ Kneden
-                </button>
+              {/* Nickname Input & Name Randomizer */}
+              <div className="w-full space-y-1 pt-1 border-t border-slate-200/70 dark:border-slate-800">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-0.5">
+                  {t.nickname || "Je Spelersnaam"}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    maxLength={18}
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
+                    placeholder={lang === "nl" ? "Bijv. KaasKoning" : "e.g. QuizKing"}
+                    className="w-full text-base font-bold px-3 py-2 border-2 border-slate-200 dark:border-slate-800 rounded-xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRandomNickname}
+                    className="px-3 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 font-bold text-xs flex items-center gap-1 transition cursor-pointer shrink-0 border border-purple-200 dark:border-purple-800"
+                    title={lang === "nl" ? "Genereer een leuke naam" : "Generate fun name"}
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                    <span>{t.randomName || "Naam"}</span>
+                  </button>
+                </div>
               </div>
+            </div>
 
-              {/* Selector Menu Grid */}
-              <div className="max-h-[160px] overflow-y-auto bg-white/50 dark:bg-slate-900/50 p-2 rounded-2xl border border-slate-100 dark:border-slate-800">
-                {avatarTab === "base" && (
-                  <div className="grid grid-cols-5 gap-1.5 animate-fade-in">
-                    {AVATAR_BASES.map((b, idx) => (
+            {/* 2 Clean Main Tabs: DiceBear Karakters vs Eigen Stijl */}
+            <div className="flex rounded-2xl bg-slate-100 dark:bg-slate-900 p-1 border border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setAvatarMode("dicebear"); sfx.playSelectAnswer(); triggerReaction(); }}
+                className={`flex-1 py-2 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
+                  avatarMode === "dicebear"
+                    ? "bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>🐻</span>
+                <span>{t.tabDiceBear || "DiceBear Karakters"}</span>
+                <span className="text-[9px] bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded-full">
+                  Populair ✨
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAvatarMode("emoji"); sfx.playSelectAnswer(); triggerReaction(); }}
+                className={`flex-1 py-2 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  avatarMode === "emoji"
+                    ? "bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>🎨</span>
+                <span>{t.tabEmoji || "Emoji Stijl"}</span>
+              </button>
+            </div>
+
+            {/* TAB 1: DICEBEAR (Super intuitive, 1-Click characters & styles) */}
+            {avatarMode === "dicebear" && (
+              <div className="space-y-3 animate-fade-in max-h-[250px] overflow-y-auto p-1 scrollbar-thin">
+                {/* 1. Style Selector */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t.dicebearStyle || "1. Kies Karaktertype"}
+                    </label>
+                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200/60 dark:border-purple-800/60">
+                      {DICEBEAR_STYLES.length} stijlen
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {DICEBEAR_STYLES.map((style) => (
                       <button
-                        key={b.id}
+                        key={style.id}
                         type="button"
-                        onClick={() => { setBaseIdx(idx); triggerReaction(); }}
-                        className={`aspect-square flex flex-col items-center justify-center text-2xl rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 ${
-                          baseIdx === idx 
-                            ? "bg-purple-50 dark:bg-purple-900/40 border-2 border-purple-600 shadow-xs" 
-                            : b.emoji === "" 
-                              ? "bg-slate-100 dark:bg-slate-950 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-800"
-                              : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
+                        onClick={() => handleSelectDiceBearStyle(style.id)}
+                        className={`px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                          dbStyle === style.id
+                            ? "bg-purple-600 text-white shadow-xs scale-102"
+                            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-purple-300"
                         }`}
-                        title={b.name}
+                        title={style.description}
                       >
-                        {b.emoji}
+                        <span className="text-sm">{style.emoji}</span>
+                        <span>{style.name}</span>
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
 
-                {avatarTab === "hat" && (
-                  <div className="grid grid-cols-4 gap-1.5 animate-fade-in">
-                    {AVATAR_HATS.map((h, idx) => (
+                {/* 2. Quick Pick Gallery */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t.dicebearPickChar || "2. Kies je Karakter"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={shuffleStyleSeeds}
+                      className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1 cursor-pointer bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-lg border border-purple-200/60 dark:border-purple-800/60"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{t.shuffleChars || "Nieuwe Figuren"}</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-36 overflow-y-auto p-1.5 bg-slate-50/70 dark:bg-slate-950/40 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 scrollbar-thin">
+                    {customSeeds.map((item) => {
+                      const isSelected = dbSeed === item.seed;
+                      return (
+                        <button
+                          key={item.seed}
+                          type="button"
+                          onClick={() => {
+                            setDbSeed(item.seed);
+                            if (!nickname.trim() || nickname.startsWith("Speler") || nickname.startsWith("Player")) {
+                              setNickname(item.name + Math.floor(Math.random() * 89 + 10));
+                            }
+                            sfx.playSelectAnswer();
+                            triggerReaction();
+                          }}
+                          className={`p-1.5 rounded-xl flex flex-col items-center gap-1 transition-all cursor-pointer relative select-none ${
+                            isSelected
+                              ? "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-600 shadow-sm ring-2 ring-purple-400/40 scale-105"
+                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-300 hover:scale-105"
+                          }`}
+                        >
+                          <img
+                            src={getDiceBearAvatarUrl(dbStyle, item.seed, dbBg)}
+                            alt={item.name}
+                            className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 object-cover"
+                            loading="lazy"
+                          />
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-full">
+                            {item.name}
+                          </span>
+                          {isSelected && (
+                            <div className="absolute top-1 right-1 p-0.5 bg-purple-600 text-white rounded-full">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Character Seed Input */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-0.5">
+                    {t.dicebearSeed || "3. Karakter Zaadje / Eigen Tekst (Optioneel)"}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={dbSeed}
+                      maxLength={25}
+                      onChange={(e) => {
+                        setDbSeed(e.target.value.replace(/[:|~]/g, ""));
+                        triggerReaction();
+                      }}
+                      placeholder="Typ een woord om te morpheren..."
+                      className="w-full text-xs font-bold px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl focus:border-purple-500 outline-none transition bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const words = ["Baas", "Held", "Turbo", "Flits", "Koning", "Brein", "Spook", "Ninja", "Dino", "Pixel", "Raket"];
+                        const randWord = `${words[Math.floor(Math.random() * words.length)]}_${Math.floor(Math.random() * 900 + 100)}`;
+                        setDbSeed(randWord);
+                        sfx.playSelectAnswer();
+                        triggerReaction();
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 font-bold text-xs flex items-center gap-1 transition cursor-pointer shrink-0 border border-purple-200 dark:border-purple-800"
+                      title="Genereer willekeurig zaadje"
+                    >
+                      <Dices className="w-3.5 h-3.5" />
+                      <span>Rol</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Background Color Palette */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-0.5">
+                    {t.dicebearBg || "4. Achtergrondkleur"}
+                  </label>
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    {DICEBEAR_BACKGROUNDS.map((bg) => (
                       <button
-                        key={h.id}
+                        key={bg.id}
                         type="button"
-                        onClick={() => { setHatIdx(idx); setCustomHatX(0); setCustomHatY(0); setCustomHatSize(0); triggerReaction(); }}
-                        className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 gap-1 ${
-                          hatIdx === idx 
-                            ? "bg-purple-50 dark:bg-purple-900/45 border-2 border-purple-600 shadow-xs" 
-                            : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
+                        onClick={() => {
+                          setDbBg(bg.hex);
+                          sfx.playSelectAnswer();
+                          triggerReaction();
+                        }}
+                        className={`w-7 h-7 rounded-full shrink-0 transition-transform cursor-pointer shadow-xs relative flex items-center justify-center border border-white/40 dark:border-slate-700 ${bg.colorClass} ${
+                          dbBg === bg.hex
+                            ? "ring-3 ring-purple-500 scale-110 shadow-md"
+                            : "hover:scale-105 opacity-90"
                         }`}
-                        title={h.name}
+                        title={bg.name}
                       >
-                        <span className="text-xl">{h.emoji || "✖️"}</span>
-                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold truncate max-w-full px-1">{idx === 0 ? "Geen" : h.name.split(" ")[0]}</span>
+                        {dbBg === bg.hex && (
+                          <Check className="w-3 h-3 text-slate-900 dark:text-white drop-shadow stroke-[3]" />
+                        )}
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
+              </div>
+            )}
 
-                {avatarTab === "acc" && (
-                  <div className="grid grid-cols-4 gap-1.5 animate-fade-in">
-                    {AVATAR_ACCESSORIES.map((a, idx) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => { setAccIdx(idx); setCustomAccX(0); setCustomAccY(0); setCustomAccSize(0); triggerReaction(); }}
-                        className={`py-2 flex flex-col items-center justify-center rounded-xl transition cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 gap-1 ${
-                          accIdx === idx 
-                            ? "bg-purple-100/30 dark:bg-purple-900/45 border-2 border-purple-600 shadow-xs" 
-                            : "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-white"
-                        }`}
-                        title={a.name}
-                      >
-                        <span className="text-xl">{a.emoji || "✖️"}</span>
-                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold truncate max-w-full px-1">{idx === 0 ? "Geen" : a.name.split(" ")[0]}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+            {/* TAB 2: EMOJI SYSTEM */}
+            {avatarMode === "emoji" && (
+              <div className="space-y-3 animate-fade-in">
+                {/* Sub-tabs for Emoji */}
+                <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => { setAvatarTab("characters"); sfx.playSelectAnswer(); }}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      avatarTab === "characters"
+                        ? "bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🎭 Kant-en-klaar ({AVATAR_PRESETS.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAvatarTab("customize"); sfx.playSelectAnswer(); }}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      avatarTab === "customize"
+                        ? "bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ Zelf Samenstellen
+                  </button>
+                </div>
 
-                {avatarTab === "bg" && (
-                  <div className="grid grid-cols-3 gap-2 animate-fade-in">
+            {/* TAB 1: CHARACTERS (Categorized, 1-Click Cards) */}
+            {avatarTab === "characters" && (
+              <div className="space-y-2 animate-fade-in">
+                {/* Category Filter Pills */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {[
+                    { id: "all", label: t.catAll || "Alles" },
+                    { id: "animals", label: t.catAnimals || "Dieren 🐾" },
+                    { id: "scifi", label: t.catSciFi || "Sci-Fi 🚀" },
+                    { id: "food", label: t.catFood || "Eten & Fun 🍕" },
+                    { id: "heroes", label: t.catHeroes || "Helden ⚡" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => { setActiveCategory(cat.id as any); sfx.playSelectAnswer(); }}
+                      className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition cursor-pointer ${
+                        activeCategory === cat.id
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grid of Characters */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto p-1 scrollbar-thin">
+                  {AVATAR_PRESETS
+                    .filter((p) => activeCategory === "all" || p.category === activeCategory)
+                    .map((p) => {
+                      const isSelected = activePresetId === p.id || (
+                        baseIdx === p.baseIdx && hatIdx === p.hatIdx && accIdx === p.accIdx && gradIdx === p.gradIdx
+                      );
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => applyPreset(p)}
+                          className={`p-2 rounded-2xl border flex items-center gap-2 text-left transition-all cursor-pointer relative ${
+                            isSelected
+                              ? "bg-purple-50 dark:bg-purple-950/60 border-purple-500 shadow-sm ring-2 ring-purple-400/60 scale-[1.02]"
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-700 hover:bg-purple-50/20"
+                          }`}
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl shrink-0 border border-slate-200 dark:border-slate-700">
+                            {p.emojiBadge}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-slate-800 dark:text-white truncate">
+                              {p.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                              {p.suggestedName}
+                            </p>
+                          </div>
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 p-0.5 bg-purple-600 text-white rounded-full">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: CUSTOMIZE (Easy Color Theme + Hat + Accessory) */}
+            {avatarTab === "customize" && (
+              <div className="space-y-3 animate-fade-in max-h-[220px] overflow-y-auto p-1 scrollbar-thin">
+                {/* 1. Theme Color */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block px-0.5">
+                    {t.themeColor || "1. Kleur & Sfeer"}
+                  </label>
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                     {AVATAR_GRADIENTS.map((g, idx) => (
                       <button
                         key={g.id}
                         type="button"
-                        onClick={() => { setGradIdx(idx); triggerReaction(); }}
+                        onClick={() => {
+                          setActivePresetId(null);
+                          setGradIdx(idx);
+                          sfx.playSelectAnswer();
+                          triggerReaction();
+                        }}
                         style={{ background: `linear-gradient(135deg, ${g.stops[0]}, ${g.stops[1]})` }}
-                        className={`py-2 px-1 rounded-xl text-[10px] font-black text-white text-shadow shadow-xs transition hover:scale-105 cursor-pointer text-center relative ${
-                          gradIdx === idx 
-                            ? "ring-4 ring-purple-500 outline-none scale-102" 
-                            : "opacity-85 border border-white dark:border-slate-900"
+                        className={`w-9 h-9 rounded-full shrink-0 transition-transform cursor-pointer shadow-xs relative flex items-center justify-center ${
+                          gradIdx === idx
+                            ? "ring-4 ring-purple-500 scale-110 shadow-md"
+                            : "hover:scale-105 opacity-90 border border-white/40"
                         }`}
+                        title={g.name}
                       >
-                        {g.name}
+                        {gradIdx === idx && (
+                          <Check className="w-4 h-4 text-white drop-shadow stroke-[3]" />
+                        )}
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
 
-                {avatarTab === "style" && (
-                  <div className="space-y-4 p-2 animate-fade-in text-left">
-                    {/* Hat Nudging */}
-                    <div className="bg-slate-100/30 dark:bg-slate-950/30 p-3 rounded-xl space-y-3 border border-slate-200/40 dark:border-slate-900">
-                      <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">👑 Positie Hoofddeksel</p>
-                      {hatIdx === 0 ? (
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">Kies overmorgen eerst een hoed om deze te kneden!</p>
-                      ) : (
-                        <div className="space-y-2">
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Grootte:</span>
-                              <span className="font-bold">{customHatSize > 0 ? `+${customHatSize}` : customHatSize}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-15"
-                              max="25"
-                              value={customHatSize}
-                              onChange={(e) => { setCustomHatSize(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Hoogte:</span>
-                              <span className="font-bold">{customHatY > 0 ? `+${customHatY}` : customHatY}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-20"
-                              max="20"
-                              value={customHatY}
-                              onChange={(e) => { setCustomHatY(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Horizontaal:</span>
-                              <span className="font-bold">{customHatX > 0 ? `+${customHatX}` : customHatX}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-20"
-                              max="20"
-                              value={customHatX}
-                              onChange={(e) => { setCustomHatX(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Lens/Acc Nudging */}
-                    <div className="bg-slate-100/30 dark:bg-slate-950/30 p-3 rounded-xl space-y-3 border border-slate-200/40 dark:border-slate-900">
-                      <p className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1">🕶️ Positie Extra/Bril</p>
-                      {accIdx === 0 ? (
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">Kies eerst een bril of extra item om deze te kneden!</p>
-                      ) : (
-                        <div className="space-y-2">
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Grootte:</span>
-                              <span className="font-bold">{customAccSize > 0 ? `+${customAccSize}` : customAccSize}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-15"
-                              max="25"
-                              value={customAccSize}
-                              onChange={(e) => { setCustomAccSize(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Hoogte:</span>
-                              <span className="font-bold">{customAccY > 0 ? `+${customAccY}` : customAccY}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-20"
-                              max="20"
-                              value={customAccY}
-                              onChange={(e) => { setCustomAccY(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[11px] font-mono text-slate-500 mb-1">
-                              <span>Horizontaal:</span>
-                              <span className="font-bold">{customAccX > 0 ? `+${customAccX}` : customAccX}</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="-20"
-                              max="20"
-                              value={customAccX}
-                              onChange={(e) => { setCustomAccX(Number(e.target.value)); triggerReaction(); }}
-                              className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                {/* 2. Base Character with Category Filters and Rich Grid */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t.tabBase || "2. Karakter Figuur"}
+                    </label>
+                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200/60 dark:border-purple-800/60">
+                      {AVATAR_BASES.length} {lang === "nl" ? "emojis" : "emojis"}
+                    </span>
                   </div>
-                )}
+
+                  {/* Sub-category pills for base emojis */}
+                  <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                    {[
+                      { id: "all", label: lang === "nl" ? "Alles" : "All" },
+                      { id: "animals", label: "🐾 Dieren" },
+                      { id: "food", label: "🍔 Eten" },
+                      { id: "gaming", label: "🎮 Gaming" },
+                      { id: "magic", label: "✨ Magie" },
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setCustomBaseCategory(cat.id as any);
+                          sfx.playSelectAnswer();
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
+                          customBaseCategory === cat.id
+                            ? "bg-purple-600 text-white shadow-xs scale-102"
+                            : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Rich Emoji Grid */}
+                  <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-slate-50/70 dark:bg-slate-950/40 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 scrollbar-thin">
+                    {AVATAR_BASES
+                      .map((b, idx) => ({ ...b, originalIdx: idx }))
+                      .filter((b) => customBaseCategory === "all" || b.category === customBaseCategory)
+                      .map((b) => {
+                        const isSelected = baseIdx === b.originalIdx;
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => {
+                              setActivePresetId(null);
+                              setBaseIdx(b.originalIdx);
+                              sfx.playSelectAnswer();
+                              triggerReaction();
+                            }}
+                            className={`h-10 rounded-xl flex items-center justify-center text-xl transition-all cursor-pointer select-none ${
+                              isSelected
+                                ? "bg-purple-100 dark:bg-purple-900/70 border-2 border-purple-600 scale-105 shadow-sm ring-2 ring-purple-400/40"
+                                : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-purple-300 hover:scale-105"
+                            }`}
+                            title={b.name}
+                          >
+                            <span>{b.emoji}</span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* 3. Hat / Headwear */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t.hatOptional || "3. Hoofddeksel (Optioneel)"}
+                    </label>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                      {AVATAR_HATS.length} {lang === "nl" ? "keuzes" : "options"}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                    {AVATAR_HATS.map((h, idx) => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => {
+                          setActivePresetId(null);
+                          setHatIdx(idx);
+                          setCustomHatX(0);
+                          setCustomHatY(0);
+                          setCustomHatSize(0);
+                          sfx.playSelectAnswer();
+                          triggerReaction();
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                          hatIdx === idx
+                            ? "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-600 text-purple-700 dark:text-purple-300 shadow-sm scale-102"
+                            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-purple-300"
+                        }`}
+                        title={h.name}
+                      >
+                        <span className="text-sm">{h.emoji || "✖️"}</span>
+                        <span>{idx === 0 ? (t.noneOption || "Geen") : h.name.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Accessory */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between px-0.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t.accOptional || "4. Bril & Extra's (Optioneel)"}
+                    </label>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                      {AVATAR_ACCESSORIES.length} {lang === "nl" ? "keuzes" : "options"}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                    {AVATAR_ACCESSORIES.map((a, idx) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => {
+                          setActivePresetId(null);
+                          setAccIdx(idx);
+                          setCustomAccX(0);
+                          setCustomAccY(0);
+                          setCustomAccSize(0);
+                          sfx.playSelectAnswer();
+                          triggerReaction();
+                        }}
+                        className={`px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                          accIdx === idx
+                            ? "bg-purple-100 dark:bg-purple-900/60 border-2 border-purple-600 text-purple-700 dark:text-purple-300 shadow-sm scale-102"
+                            : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-purple-300"
+                        }`}
+                        title={a.name}
+                      >
+                        <span className="text-sm">{a.emoji || "✖️"}</span>
+                        <span>{idx === 0 ? (t.noneOption || "Geen") : a.name.split(" ")[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div>
-              <input
-                type="text"
-                required
-                maxLength={15}
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value.replace(/[:|~]/g, ""))}
-                placeholder={lang === "nl" ? "Bijv. QuizKoning" : "e.g. QuizKing"}
-                className="w-full text-center text-lg font-bold px-4 py-4 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:border-purple-500 dark:focus:border-purple-500 outline-none transition bg-slate-50 focus:bg-white dark:bg-slate-950/50 dark:focus:bg-slate-900 text-slate-900 dark:text-white shadow-inner"
-                disabled={isLoading}
-              />
-              <p className="mt-3 text-center text-[11px] text-slate-500 leading-normal max-w-[340px] mx-auto">
-                ⚠️ {lang === "nl" 
-                  ? "Spelregel: Gebruik je eigen naam (herkenbaar als jij) en cheaten is streng verboden!" 
-                  : "Rule: Use your own name (recognizable as you) and cheating is strictly forbidden!"}
-              </p>
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900 text-red-700 dark:text-red-400 rounded-xl text-center text-sm">
-                {error}
+            )}
               </div>
             )}
 
-            <div className="flex gap-3">
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 rounded-2xl text-center text-xs font-semibold">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setStep("code")}
-                className="w-1/3 flex items-center justify-center border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 py-4 rounded-xl font-bold transition cursor-pointer uppercase tracking-wider text-sm"
+                className="w-1/3 flex items-center justify-center border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 py-3.5 rounded-2xl font-bold transition cursor-pointer uppercase tracking-wider text-xs"
                 disabled={isLoading}
               >
                 {t.back}
@@ -878,13 +1225,13 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
               <button
                 type="submit"
                 disabled={isLoading || !nickname.trim()}
-                className="w-2/3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-black shadow-lg shadow-purple-600/30 transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none uppercase tracking-widest text-sm"
+                className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 via-rose-600 to-emerald-600 hover:from-red-500 hover:to-emerald-500 text-white py-3.5 rounded-2xl font-black shadow-lg shadow-red-600/30 transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer disabled:opacity-40 disabled:hover:translate-y-0 disabled:shadow-none uppercase tracking-widest text-xs border border-red-400/40"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   <>
-                    <Play className="w-5 h-5 fill-current" /> {lang === "nl" ? "Meedoen!" : "Join!"}
+                    <Play className="w-4 h-4 fill-current text-amber-300" /> {lang === "nl" ? "🎄 Spel Binnengaan 🎅" : "🎄 Enter Christmas Game 🎅"}
                   </>
                 )}
               </button>

@@ -4,8 +4,9 @@ import QuizJoin from "./components/QuizJoin";
 import QuizManager from "./components/QuizManager";
 import GameHost from "./components/GameHost";
 import GamePlayer from "./components/GamePlayer";
+import SnowEffect from "./components/SnowEffect";
 import { Quiz } from "./types";
-import { Play, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2, Volume2, VolumeX } from "lucide-react";
+import { Play, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2, Volume2, VolumeX, Bell, Snowflake } from "lucide-react";
 import { translations } from "./translations";
 import { sfx } from "./soundManager";
 import { motion, AnimatePresence } from "motion/react";
@@ -67,6 +68,20 @@ export default function App() {
     return sfx.isEnabled();
   });
   
+  // Snowfall state (active by default for Christmas Event)
+  const [showSnow, setShowSnow] = useState(() => {
+    return localStorage.getItem("kahoti_snow_enabled") !== "false";
+  });
+
+  const toggleSnow = () => {
+    const next = !showSnow;
+    setShowSnow(next);
+    localStorage.setItem("kahoti_snow_enabled", String(next));
+    if (next) {
+      sfx.playSelectAnswer();
+    }
+  };
+
   const [activeModal, setActiveModal] = useState<"rules" | "privacy" | "terms" | null>(null);
 
   useEffect(() => {
@@ -189,46 +204,71 @@ export default function App() {
       />
     );
   }
-
   return (
-    <div className="min-h-screen bg-white dark:bg-[#050505] text-slate-900 dark:text-white flex flex-col font-sans selection:bg-purple-200 dark:selection:bg-purple-900 relative">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans selection:bg-red-900 selection:text-white relative overflow-x-hidden">
       
-      {/* Name Change Announcement Banner */}
-      <div className="bg-amber-500/10 dark:bg-amber-500/5 text-amber-800 dark:text-amber-200 text-xs font-semibold py-3 px-4 text-center relative z-50 border-b border-amber-500/20 flex items-center justify-center gap-2">
-        <Sparkles className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400 animate-pulse" />
-        <span>{t.nameChangeNotice}</span>
+      {/* Festive Falling Snow Effect */}
+      {showSnow && <SnowEffect count={32} />}
+
+      {/* Christmas Event Active Announcement Banner */}
+      <div className="bg-gradient-to-r from-red-950 via-emerald-950 to-red-950 text-amber-200 text-xs font-semibold py-3 px-4 text-center relative z-50 border-b border-red-800/40 flex items-center justify-center gap-2 shadow-sm">
+        <Sparkles className="w-4 h-4 shrink-0 text-amber-400 animate-pulse" />
+        <span className="font-bold tracking-wide">{t.christmasActiveNotice || t.nameChangeNotice}</span>
       </div>
 
-      {/* Modern Minimal Header */}
-      <header className="px-6 md:px-12 py-6 w-full flex items-center justify-between z-50 relative sticky top-0 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50">
+      {/* Modern Festive Christmas Header */}
+      <header className="px-6 md:px-12 py-5 w-full flex items-center justify-between z-50 relative sticky top-0 bg-slate-950/85 backdrop-blur-xl border-b border-red-900/30">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-600/30">
-            K
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-rose-600 to-emerald-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-red-600/30 border border-white/20">
+            🎄
           </div>
-          <span className="font-extrabold font-display text-xl tracking-tight">
-            Kahoti-Rep
-          </span>
+          <div className="flex flex-col">
+            <span className="font-extrabold font-display text-xl tracking-tight flex items-center gap-1.5 text-white">
+              Kahoti-Rep <span className="text-red-400 text-xs px-2 py-0.5 rounded-full bg-red-950 border border-red-800/50 font-bold uppercase tracking-wider">Kerst Event 🎅</span>
+            </span>
+          </div>
         </div>
         
-        <div className="flex items-center gap-2 p-1.5 rounded-full bg-slate-100 dark:bg-slate-900/50 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/50">
+        <div className="flex items-center gap-2 p-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-800/80 shadow-inner">
+          {/* Quick Jingle Bells Melodie Button */}
+          <button
+            onClick={() => sfx.playJingleBells()}
+            className="px-2.5 h-8 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30"
+            title="Speel vrolijke Jingle Bells melodie"
+          >
+            <Bell className="w-3.5 h-3.5 animate-bounce" />
+            <span className="hidden sm:inline">Jingle Bells</span>
+          </button>
+
+          {/* Sneeuwval Toggle Button */}
+          <button
+            onClick={toggleSnow}
+            className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${showSnow ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm" : "text-slate-500 opacity-60 hover:opacity-100"}`}
+            title={showSnow ? "Sneeuwval uitschakelen" : "Sneeuwval inschakelen"}
+          >
+            <Snowflake className={`w-4 h-4 ${showSnow ? "animate-spin" : ""}`} style={{ animationDuration: '10s' }} />
+          </button>
+
+          <div className="w-px h-4 bg-slate-700 mx-0.5" />
+
           <button
             onClick={() => { setLang("nl"); localStorage.setItem("kahoti_rep_lang", "nl"); }}
-            className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "nl" ? "bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400" : "text-slate-500 opacity-60 hover:opacity-100"}`}
+            className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "nl" ? "bg-red-600 shadow-sm text-white" : "text-slate-400 opacity-70 hover:opacity-100"}`}
             title="Nederlands"
           >
             NL
           </button>
           <button
             onClick={() => { setLang("en"); localStorage.setItem("kahoti_rep_lang", "en"); }}
-            className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "en" ? "bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400" : "text-slate-500 opacity-60 hover:opacity-100"}`}
+            className={`w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center ${lang === "en" ? "bg-red-600 shadow-sm text-white" : "text-slate-400 opacity-70 hover:opacity-100"}`}
             title="English"
           >
             EN
           </button>
-          <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+          <div className="w-px h-4 bg-slate-700 mx-0.5" />
           <button
             onClick={() => setIsDark(!isDark)}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-amber-400 transition"
             title={lang === "nl" ? "Donkere / lichte modus" : "Dark / light mode"}
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -239,7 +279,7 @@ export default function App() {
               sfx.setEnabled(next);
               setSfxEnabled(next);
             }}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-emerald-400 transition"
             title={lang === "nl" ? (sfxEnabled ? "Geluidseffecten dempen" : "Geluidseffecten inschakelen") : (sfxEnabled ? "Mute sound effects" : "Unmute sound effects")}
           >
             {sfxEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -248,11 +288,13 @@ export default function App() {
       </header>
 
       <main className="flex-1 w-full relative z-10 flex flex-col">
-        {/* Purple Gradient Hero Section */}
-        <section className="relative w-full py-20 lg:py-32 flex flex-col items-center justify-center text-center overflow-hidden min-h-[70vh]">
-          {/* Absolute Background Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-violet-800 to-indigo-950 z-0" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 z-0 mix-blend-overlay" />
+        {/* Festive Christmas Hero Section */}
+        <section className="relative w-full py-20 lg:py-28 flex flex-col items-center justify-center text-center overflow-hidden min-h-[72vh]">
+          {/* Absolute Background Gradient with Evergreen & Deep Ruby Velvet Glows */}
+          <div className="absolute inset-0 bg-gradient-to-br from-red-950 via-slate-950 to-emerald-950 z-0" />
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/15 rounded-full blur-3xl pointer-events-none -z-0" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none -z-0" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-3xl pointer-events-none -z-0" />
           
           <div className="relative z-10 w-full max-w-5xl mx-auto px-6 md:px-12 flex flex-col items-center">
             <motion.div 
@@ -261,47 +303,53 @@ export default function App() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="flex flex-col items-center"
             >
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 text-purple-100 font-bold text-xs uppercase tracking-widest mb-8 backdrop-blur-md shadow-lg">
-                <Sparkles className="w-4 h-4" /> The Next-Gen Platform
+              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-red-500/20 border border-red-500/40 text-red-200 font-bold text-xs uppercase tracking-widest mb-8 backdrop-blur-md shadow-lg shadow-red-950/40">
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> 🎄 Kerstmis Quiz Special · Editie 2026 ❄️
               </div>
               
-              <h1 className="text-5xl md:text-7xl lg:text-[6.5rem] font-black font-display tracking-tighter leading-[1.05] mb-6 text-white drop-shadow-xl">
+              <h1 className="text-4xl md:text-6xl lg:text-[5.5rem] font-black font-display tracking-tight leading-[1.08] mb-6 text-white drop-shadow-xl">
                 {t.subtitle}
               </h1>
               
-              <p className="text-xl md:text-2xl text-purple-100/90 font-medium leading-relaxed max-w-3xl mb-12 drop-shadow-md">
+              <p className="text-lg md:text-xl text-slate-300 font-medium leading-relaxed max-w-3xl mb-12 drop-shadow-md">
                 {t.tagline}
               </p>
             </motion.div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons with Festive Styling */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-              className="flex flex-col sm:flex-row items-center gap-6 mt-4 w-full justify-center"
+              className="flex flex-col sm:flex-row items-center gap-6 mt-2 w-full justify-center"
             >
               <button
-                onClick={() => setMode("join")}
-                className="group relative flex items-center gap-5 pl-4 pr-10 py-3 rounded-full bg-white text-purple-900 shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:shadow-[0_0_60px_rgba(255,255,255,0.4)] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 cursor-pointer overflow-hidden border-2 border-white"
+                onClick={() => {
+                  sfx.playSelectAnswer();
+                  setMode("join");
+                }}
+                className="group relative flex items-center gap-5 pl-4 pr-10 py-3 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white shadow-[0_0_40px_rgba(239,68,68,0.35)] hover:shadow-[0_0_60px_rgba(239,68,68,0.55)] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 cursor-pointer overflow-hidden border-2 border-red-400"
               >
-                <div className="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center text-white transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300 shadow-inner">
-                  <Gamepad2 className="w-6 h-6" />
+                <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-white transform group-hover:scale-110 group-hover:rotate-12 transition-all duration-300 shadow-inner">
+                  <Gamepad2 className="w-7 h-7 text-white" />
                 </div>
                 <div className="flex flex-col text-left">
                   <span className="text-xl font-black uppercase tracking-widest leading-none mb-1">{t.joinGame}</span>
-                  <span className="text-xs font-bold text-purple-900/70">{t.joinGameDesc}</span>
+                  <span className="text-xs font-bold text-red-100">{t.joinGameDesc}</span>
                 </div>
               </button>
 
               <button
-                onClick={() => setMode("manage")}
-                className="group flex items-center gap-4 px-8 py-5 rounded-full bg-purple-900/40 hover:bg-purple-800/60 border border-purple-500/30 text-white backdrop-blur-md transition-all shadow-lg hover:shadow-purple-800/50 hover:-translate-y-1 active:translate-y-0 cursor-pointer"
+                onClick={() => {
+                  sfx.playSelectAnswer();
+                  setMode("manage");
+                }}
+                className="group flex items-center gap-4 px-8 py-5 rounded-full bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-100 backdrop-blur-md transition-all shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:shadow-emerald-800/50 hover:-translate-y-1 active:translate-y-0 cursor-pointer"
               >
-                <Database className="w-6 h-6 text-purple-300 group-hover:text-white transition-colors" />
+                <Database className="w-6 h-6 text-emerald-300 group-hover:text-white transition-colors" />
                 <div className="flex flex-col text-left">
                   <span className="text-lg font-bold tracking-wide leading-none mb-1">{t.manageQuizzes}</span>
-                  <span className="text-xs font-bold text-purple-300">{t.hostBtn}</span>
+                  <span className="text-xs font-bold text-emerald-300">{t.hostBtn}</span>
                 </div>
               </button>
             </motion.div>
@@ -310,41 +358,40 @@ export default function App() {
           {/* Decorative wave divider */}
           <div className="absolute bottom-[-1px] left-0 w-full overflow-hidden leading-none z-10">
             <svg className="block w-full h-[60px] md:h-[120px]" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
-              <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V95.8C59.71,118.08,130.83,121.32,196.36,108.68,239.37,100.41,280.93,76.54,321.39,56.44Z" className="fill-white dark:fill-[#050505]"></path>
+              <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V120H0V95.8C59.71,118.08,130.83,121.32,196.36,108.68,239.37,100.41,280.93,76.54,321.39,56.44Z" className="fill-slate-950"></path>
             </svg>
           </div>
         </section>
 
-        {/* Content Section: Goals & Who We Are */}
-        <section className="py-24 px-6 md:px-12 w-full max-w-6xl mx-auto grid md:grid-cols-2 gap-12 lg:gap-20 relative z-10">
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-[2.5rem] p-10 md:p-14 border border-slate-200/60 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none hover:-translate-y-1 transition-transform duration-300">
-            <div className="w-16 h-16 bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400 rounded-2xl flex items-center justify-center mb-8 shadow-sm">
-              <Play className="w-8 h-8" />
+        {/* Content Section: Goals & Who We Are with Festive Touches */}
+        <section className="py-20 px-6 md:px-12 w-full max-w-6xl mx-auto grid md:grid-cols-2 gap-10 lg:gap-16 relative z-10">
+          <div className="bg-slate-900/60 rounded-[2.5rem] p-10 md:p-12 border border-red-900/40 shadow-xl shadow-red-950/20 hover:-translate-y-1 transition-transform duration-300 backdrop-blur-md">
+            <div className="w-16 h-16 bg-red-950/60 border border-red-800/50 text-red-400 rounded-2xl flex items-center justify-center mb-6 shadow-sm text-3xl">
+              🎁
             </div>
-            <h3 className="text-3xl font-black font-display tracking-tight mb-4 text-slate-900 dark:text-white">
+            <h3 className="text-2xl font-black font-display tracking-tight mb-3 text-white flex items-center gap-2">
               {t.ourGoal}
             </h3>
-            <p className="text-slate-600 dark:text-slate-400 text-lg leading-relaxed font-medium">
+            <p className="text-slate-300 text-base leading-relaxed font-medium">
               {t.ourGoalDesc}
             </p>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-[2.5rem] p-10 md:p-14 border border-slate-200/60 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none hover:-translate-y-1 transition-transform duration-300">
-            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-8 shadow-sm">
-              <Users className="w-8 h-8" />
+          <div className="bg-slate-900/60 rounded-[2.5rem] p-10 md:p-12 border border-emerald-900/40 shadow-xl shadow-emerald-950/20 hover:-translate-y-1 transition-transform duration-300 backdrop-blur-md">
+            <div className="w-16 h-16 bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 rounded-2xl flex items-center justify-center mb-6 shadow-sm text-3xl">
+              🎄
             </div>
-            <h3 className="text-3xl font-black font-display tracking-tight mb-4 text-slate-900 dark:text-white">
+            <h3 className="text-2xl font-black font-display tracking-tight mb-3 text-white flex items-center gap-2">
               {t.whoWeAre}
             </h3>
-            <p className="text-slate-600 dark:text-slate-400 text-lg leading-relaxed font-medium">
+            <p className="text-slate-300 text-base leading-relaxed font-medium">
               {t.whoWeAreDesc}
             </p>
           </div>
         </section>
-
       </main>
 
-      <footer className="w-full bg-slate-100 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 py-12 px-6">
+      <footer className="w-full bg-slate-900 border-t border-slate-800 py-12 px-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-center md:text-left">
             © {new Date().getFullYear()} {t.footer}

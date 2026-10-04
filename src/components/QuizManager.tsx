@@ -53,6 +53,9 @@ import {
 } from "lucide-react";
 import { translations } from "../translations";
 import { ImageUploader } from "./ImageUploader";
+import SnowEffect from "./SnowEffect";
+import confetti from "canvas-confetti";
+import { sfx } from "../soundManager";
 
 interface QuizManagerProps {
   lang?: "nl" | "en";
@@ -61,6 +64,7 @@ interface QuizManagerProps {
 }
 
 const THEME_OPTIONS = [
+  { id: "christmas", label: "Kerstmis Event 🎄", icon: Snowflake, desc: "Sfeervol kerstrood, dennegroen & sneeuwval" },
   { id: "default", label: "Standaard Donker", icon: Moon, desc: "Klassiek donkerblauw" },
   { id: "summer", label: "Zomer Strand", icon: Sun, desc: "Zonnige zand & zee sfeer" },
   { id: "winter", label: "Winter Frost", icon: Snowflake, desc: "Frisse sneeuw & ijskristallen" },
@@ -86,6 +90,92 @@ const MUSIC_OPTIONS = [
     badge: "Dynamisch",
   },
 ];
+
+export const CHRISTMAS_SAMPLE_QUIZ: Quiz = {
+  id: "christmas_special_2026",
+  title: "🎄 De Grote Kerstmis & Eindejaars Quiz 2026 🎅",
+  description: "Feestelijke vragen over kersttradities, kerstmuziek, films en winterse gezelligheid voor jong en oud!",
+  imageUrl: "",
+  creatorId: "system",
+  createdAt: "2026-12-25T00:00:00.000Z",
+  theme: "christmas",
+  lobbyTheme: "christmas",
+  lobbyMusicUrl: "https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3",
+  questions: [
+    {
+      id: "q_xmas_1",
+      questionText: "Wat laten kinderen traditiegetrouw achter voor de Kerstman op kerstavond?",
+      imageUrl: "",
+      timeLimit: 20,
+      points: 1000,
+      options: ["Koekjes en melk 🥛🍪", "Kaas en worst 🧀", "Warme erwtensoep 🥣", "Glühwein en olijven 🍷"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "multiple_choice",
+      theme: "christmas",
+    },
+    {
+      id: "q_xmas_2",
+      questionText: "Hoe heet het rendier van de Kerstman met de beroemde felrode neus?",
+      imageUrl: "",
+      timeLimit: 20,
+      points: 1000,
+      options: ["Rudolf (Rudolph) 🦌", "Dasher", "Prancer", "Comet"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "multiple_choice",
+      theme: "christmas",
+    },
+    {
+      id: "q_xmas_3",
+      questionText: "Waar of niet waar: Het bekende kerstliedje 'Jingle Bells' werd oorspronkelijk gecomponeerd voor Thanksgiving!",
+      imageUrl: "",
+      timeLimit: 15,
+      points: 1000,
+      options: ["Waar", "Niet waar"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "true_false",
+      theme: "christmas",
+    },
+    {
+      id: "q_xmas_4",
+      questionText: "In welke iconische kerstfilm wordt de jonge Kevin McCallister per ongeluk alleen thuis achtergelaten?",
+      imageUrl: "",
+      timeLimit: 20,
+      points: 1000,
+      options: ["Home Alone 🏠🎄", "The Grinch", "The Santa Clause", "Elf"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "multiple_choice",
+      theme: "christmas",
+    },
+    {
+      id: "q_xmas_5",
+      questionText: "Wat hangen mensen traditiegetrouw boven de deur om elkaar eronder te kussen?",
+      imageUrl: "",
+      timeLimit: 20,
+      points: 1000,
+      options: ["Maretak (Mistletoe) 🌿", "Hulst met bessen", "Dennenkrans", "Kerstslinger"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "multiple_choice",
+      theme: "christmas",
+    },
+    {
+      id: "q_xmas_6",
+      questionText: "Hoeveel rendieren trekken volgens het klassieke kerstgedicht traditiegetrouw de arrenslee van de Kerstman (inclusief Rudolf)?",
+      imageUrl: "",
+      timeLimit: 25,
+      points: 1000,
+      options: ["9 rendieren", "8 rendieren", "6 rendieren", "12 rendieren"],
+      correctOptionIndex: 0,
+      correctOptionIndices: [0],
+      questionType: "multiple_choice",
+      theme: "christmas",
+    },
+  ],
+};
 
 export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizManagerProps) {
   const t = translations[lang];
@@ -117,9 +207,9 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [theme, setTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
-  const [lobbyTheme, setLobbyTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon">("default");
-  const [lobbyMusicUrl, setLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3");
+  const [theme, setTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas">("christmas");
+  const [lobbyTheme, setLobbyTheme] = useState<"default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas">("christmas");
+  const [lobbyMusicUrl, setLobbyMusicUrl] = useState("https://www.image2url.com/r2/default/audio/1781202806102-a59be124-834b-4f52-af69-f27e4cd90e3e.mp3");
   const [isSaving, setIsSaving] = useState(false);
 
   // Audio Preview state
@@ -657,6 +747,55 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
     }
   };
 
+  const handleLoadChristmasSampleQuiz = async () => {
+    try {
+      sfx.playCorrect();
+      confetti({
+        particleCount: 90,
+        spread: 75,
+        origin: { y: 0.6 },
+        colors: ["#dc2626", "#16a34a", "#fbbf24", "#ffffff"],
+      });
+
+      const existing = quizzes.find((q) => q.id === CHRISTMAS_SAMPLE_QUIZ.id);
+      if (existing) {
+        alert("De Kerstmis Special Quiz staat al in je lijst! Je kunt hem direct starten.");
+        return;
+      }
+
+      const uId = await getUserId();
+      const newQuiz: Quiz = {
+        ...CHRISTMAS_SAMPLE_QUIZ,
+        creatorId: uId,
+        createdAt: new Date().toISOString(),
+      };
+
+      const updated = [newQuiz, ...quizzes];
+      setQuizzes(updated);
+      try {
+        localStorage.setItem("cached_quizzes", JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Save to Supabase in background
+      supabase.from("quizzes").upsert({
+        id: newQuiz.id,
+        title: newQuiz.title,
+        description: newQuiz.description,
+        image_url: newQuiz.imageUrl || null,
+        created_by: uId,
+        created_at: newQuiz.createdAt,
+        questions: newQuiz.questions,
+        lobby_music_url: newQuiz.lobbyMusicUrl,
+      }).then(({ error }) => {
+        if (error) console.warn("Supabase upsert warning:", error);
+      });
+    } catch (e) {
+      console.error("Fout bij inladen kerstquiz:", e);
+    }
+  };
+
   const handleDeleteQuiz = async (quizId: string) => {
     if (!confirm("Weet je zeker dat je deze quiz wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")) return;
     try {
@@ -685,7 +824,9 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const currentQuestion = activeQuestionIdx >= 0 ? questions[activeQuestionIdx] : null;
 
   return (
-    <div id="quiz-manager-root" className="min-h-screen bg-slate-50/50 dark:bg-slate-950 pb-20 text-slate-900 dark:text-slate-100">
+    <div id="quiz-manager-root" className="min-h-screen bg-slate-50/50 dark:bg-slate-950 pb-20 text-slate-900 dark:text-slate-100 relative">
+      {/* Festive Falling Snow Effect */}
+      <SnowEffect count={20} />
       {/* Top Application Bar */}
       <header id="quiz-manager-header" className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -879,6 +1020,16 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                   <Plus className="w-4 h-4" />
                   <span>{editingQuizId ? "Quiz Bewerken" : "Nieuwe Quiz"}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleLoadChristmasSampleQuiz}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition cursor-pointer min-h-[44px] bg-red-950/60 hover:bg-red-900/80 border border-red-700/50 text-amber-300 shadow-sm"
+                  title="Laad een complete kerstquiz met 6 feestelijke vragen"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                  <span>🎄 Laad Kerstmis Quiz 🎅</span>
+                </button>
               </div>
 
               {activeTab === "list" && quizzes.length > 0 && (
@@ -915,10 +1066,10 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                 ) : filteredQuizzes.length === 0 ? (
                   <div
                     id="empty-quizzes-card"
-                    className="text-center py-16 px-6 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 max-w-lg mx-auto my-8"
+                    className="text-center py-16 px-6 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-red-800/40 max-w-lg mx-auto my-8 shadow-sm"
                   >
-                    <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-4">
-                      <Sparkles className="w-7 h-7" />
+                    <div className="w-16 h-16 rounded-2xl bg-red-950/60 border border-red-800/50 text-red-400 flex items-center justify-center mx-auto mb-4 text-3xl">
+                      🎄
                     </div>
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2">
                       {searchQuery ? "Geen quizzen gevonden" : "Nog geen quizzen aangemaakt"}
@@ -926,20 +1077,30 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
                       {searchQuery
                         ? "Probeer een andere zoekterm om jouw quiz te vinden."
-                        : "Bouw je eerste interactieve quiz met afbeeldingen, geluksrad of puzzels en start een live sessie!"}
+                        : "Start direct met onze officiële kerstspecial of bouw je eigen feestelijke quiz!"}
                     </p>
-                    <button
-                      id="btn-create-first-quiz"
-                      type="button"
-                      onClick={() => {
-                        handleResetForm();
-                        setActiveTab("create");
-                      }}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition cursor-pointer min-h-[44px]"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>{searchQuery ? "Nieuwe Quiz Maken" : "Eerste Quiz Aanmaken"}</span>
-                    </button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleLoadChristmasSampleQuiz}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-emerald-600 hover:from-red-500 hover:to-emerald-500 text-white font-bold text-xs uppercase tracking-wider shadow-md transition cursor-pointer min-h-[44px]"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                        <span>🎄 Laad Direct Kerstquiz 🎅</span>
+                      </button>
+                      <button
+                        id="btn-create-first-quiz"
+                        type="button"
+                        onClick={() => {
+                          handleResetForm();
+                          setActiveTab("create");
+                        }}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider shadow-sm transition cursor-pointer min-h-[44px]"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{searchQuery ? "Nieuwe Quiz Maken" : "Zelf Maken"}</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

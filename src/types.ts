@@ -8,8 +8,8 @@ export interface Question {
   correctOptionIndex: number; // 0 to 5
   correctOptionIndices?: number[]; // indices of correct answers
   questionType?: "multiple_choice" | "true_false" | "wheel_spin" | "puzzle" | "slider";
-  theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
-  lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
+  theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas";
+  lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas";
   lobbyMusicUrl?: string;
   sliderMin?: number;
   sliderMax?: number;
@@ -24,8 +24,8 @@ export interface Quiz {
   creatorId: string;
   createdAt: any; // Firestore timestamp or standard Date ISO string
   questions: Question[];
-  theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
-  lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon";
+  theme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas";
+  lobbyTheme?: "default" | "summer" | "winter" | "halloween" | "space" | "neon" | "christmas";
   lobbyMusicUrl?: string;
 }
 
@@ -147,15 +147,24 @@ export const getThemeConfig = (theme?: string): ThemeConfig => {
         emoji: "",
         name: "Neon Retro",
       };
+    case "christmas":
+      return {
+        bgClasses: "bg-red-950 bg-gradient-to-br from-red-950 via-emerald-950 to-slate-950 text-red-50 transition-all duration-700 relative overflow-hidden",
+        cardBg: "bg-slate-900/90 border border-emerald-500/40 shadow-2xl backdrop-blur-md shadow-red-900/30",
+        textColor: "text-red-50 dark:text-red-100",
+        accentColor: "bg-red-600 border-red-700",
+        emoji: "🎄",
+        name: "Kerstmis Event 🎄",
+      };
     case "default":
     default:
       return {
-        bgClasses: "bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-all duration-500",
-        cardBg: "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm",
-        textColor: "text-slate-800 dark:text-slate-100",
-        accentColor: "bg-indigo-600 border-indigo-700",
-        emoji: "",
-        name: "Standaard",
+        bgClasses: "bg-slate-950 bg-gradient-to-br from-red-950/70 via-slate-950 to-emerald-950/60 text-slate-100 transition-all duration-700 relative overflow-hidden",
+        cardBg: "bg-slate-900/85 border border-red-500/30 shadow-xl backdrop-blur-md",
+        textColor: "text-red-100 dark:text-slate-100",
+        accentColor: "bg-red-600 border-red-700",
+        emoji: "🎄",
+        name: "Kerstmis Event 🎄",
       };
   }
 };

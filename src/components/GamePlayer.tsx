@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { GameSession, Player, Question, checkIsCorrect, getThemeConfig } from "../types";
 import { Check, X, Award, Loader2, Sparkles, LogOut, Clock, Trophy, ChevronUp, ChevronDown, Sliders, GripVertical, Flame, Crown, Medal, Lock, Dices, ListOrdered, Lightbulb, Snowflake, Sun, Palmtree, Ghost, Zap, Gamepad2, Ban, Search, Users, Volume2, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import SnowEffect from "./SnowEffect";
 import { parseNicknameAndAvatar, ShapeIcon, parseQuizTitle } from "../avatarUtils";
 import confetti from "canvas-confetti";
 import { LuckyWheel } from "./LuckyWheel";
@@ -956,18 +957,17 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
   return (
     <div className={`min-h-screen w-full ${activeTheme.bgClasses} ${isThemeDark ? "text-white" : "text-slate-800"} flex flex-col justify-between p-4 font-sans selection:bg-indigo-100 transition-all duration-700 relative`}>
       {/* Decorative background overlays for themes */}
-      {activeTheme.name !== "Standaard" && (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
-          {activeTheme.name === "Winter" && (
-            <>
-              <div className="absolute top-[10%] left-[15%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
-              <div className="absolute top-[35%] left-[85%] text-indigo-200/40 animate-bounce"><Snowflake className="w-6 h-6" /></div>
-              <div className="absolute top-[75%] left-[8%] text-indigo-200/40 animate-bounce"><Snowflake className="w-10 h-10" /></div>
-              <div className="absolute top-[18%] left-[55%] text-indigo-200/40 animate-bounce"><Snowflake className="w-5 h-5" /></div>
-              <div className="absolute top-[65%] left-[70%] text-indigo-200/40 animate-bounce"><Snowflake className="w-8 h-8" /></div>
-            </>
-          )}
-          {activeTheme.name === "Zomer" && (
+      <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
+        {(activeTheme.name.includes("Kerst") || activeTheme.name === "Winter" || activeTheme.name.includes("Christmas") || activeTheme.name === "Kerstmis Event 🎄") && (
+          <>
+            <SnowEffect count={25} />
+            <div className="absolute top-[8%] left-[10%] text-amber-300/40 animate-pulse text-xl">⭐</div>
+            <div className="absolute top-[28%] left-[88%] text-red-400/40 animate-bounce text-xl">🎄</div>
+            <div className="absolute top-[75%] left-[8%] text-emerald-400/40 animate-pulse text-xl">🎁</div>
+            <div className="absolute top-[18%] left-[55%] text-indigo-200/40 animate-bounce"><Snowflake className="w-5 h-5" /></div>
+          </>
+        )}
+        {activeTheme.name === "Zomer" && (
             <>
               <div className="absolute top-[8%] left-[22%] text-amber-300/40 animate-spin duration-10000"><Sun className="w-9 h-9" /></div>
               <div className="absolute top-[20%] left-[80%] text-emerald-400/40 animate-pulse"><Palmtree className="w-9 h-9" /></div>
@@ -999,7 +999,6 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
             </>
           )}
         </div>
-      )}
 
       {isLoading || !playerUid ? (
         <div className="flex-1 flex flex-col items-center justify-center py-20">
@@ -1015,38 +1014,54 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto py-10"
+              className="flex-1 flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto py-10 relative z-10"
             >
-              <div className="w-24 h-24 bg-white border-4 border-indigo-100 rounded-full flex items-center justify-center shadow-xs overflow-hidden">
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              <div className="relative">
+                <div className="absolute inset-0 bg-indigo-500/20 dark:bg-purple-500/30 rounded-full blur-xl animate-pulse" />
+                <div className="relative w-28 h-28 bg-white dark:bg-slate-900 border-4 border-indigo-200 dark:border-indigo-500/30 rounded-full flex items-center justify-center shadow-xl overflow-hidden">
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                </div>
+                <div className="absolute bottom-1 right-1 w-6 h-6 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full flex items-center justify-center shadow-sm">
+                  <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full uppercase tracking-wider">
-                  Ingelogd als {displayName}
-                  {isVerified && (
-                    <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm animate-pulse" title="Geverifieerde Speler">
-                      ✓
-                    </span>
-                  )}
-                </span>
-                <h1 className={`text-2xl font-display ${textTitleClass}`}>
-                  Je bent binnen!
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold text-xs rounded-full uppercase tracking-wider border border-emerald-200/50 dark:border-emerald-800/40 shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                    {lang === "nl" ? "Verbonden als" : "Connected as"} {displayName}
+                    {isVerified && (
+                      <span className="inline-flex items-center justify-center bg-blue-500 text-white rounded-full w-3.5 h-3.5 text-[8px] font-black shrink-0 shadow-sm" title="Geverifieerde Speler">
+                        ✓
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <h1 className={`text-3xl font-black font-display tracking-tight ${textTitleClass}`}>
+                  {lang === "nl" ? "Je bent binnen! 🎉" : "You're in! 🎉"}
                 </h1>
-                <p className={`text-sm max-w-xs mx-auto ${textMutedClass}`}>
-                  Wacht geduldig tot de host het spel start. Je naam verschijnt op het grote scherm!
+                <p className={`text-sm max-w-xs mx-auto ${textMutedClass} leading-relaxed`}>
+                  {lang === "nl" 
+                    ? "Wacht rustig tot de host het spel start. Je karakter staat op het grote scherm!" 
+                    : "Wait for the host to start the game. Your character is on the big screen!"}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 py-3 rounded-2xl border border-indigo-100 font-bold justify-center font-mono w-full">
-                Code: {String(session?.code || "").padStart(6, "0").slice(0, 3)} {String(session?.code || "").padStart(6, "0").slice(3)}
+              <div className="bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 px-6 py-3.5 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 font-bold flex flex-col items-center justify-center font-mono w-full shadow-xs">
+                <span className="text-[10px] uppercase tracking-widest text-indigo-500 dark:text-indigo-400 font-sans font-bold">
+                  {lang === "nl" ? "Spelcode" : "Game PIN"}
+                </span>
+                <span className="text-xl tracking-widest font-black">
+                  {String(session?.code || "").padStart(6, "0").slice(0, 3)} {String(session?.code || "").padStart(6, "0").slice(3)}
+                </span>
               </div>
 
               <button
                 onClick={onExit}
-                className="text-slate-400 hover:text-slate-600 text-xs font-semibold flex items-center gap-1 cursor-pointer pt-6"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer pt-4 transition hover:underline"
               >
-                <LogOut className="w-3.5 h-3.5" /> Lobby verlaten
+                <LogOut className="w-3.5 h-3.5" /> {lang === "nl" ? "Lobby verlaten" : "Leave lobby"}
               </button>
             </motion.div>
           )}

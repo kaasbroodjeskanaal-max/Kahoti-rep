@@ -214,6 +214,66 @@ class SoundEffectsManager {
     osc.start(now);
     osc.stop(now + 0.25);
   }
+
+  public playJingleBells() {
+    if (!this.enabled) return;
+    const ctx = this.createAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0, now);
+    masterGain.gain.linearRampToValueAtTime(this.volume * 0.45, now + 0.02);
+    masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+    masterGain.connect(ctx.destination);
+
+    // Classic cheerful Jingle Bells melody notes: E5, E5, E5, E5, E5, E5, E5, G5, C5, D5, E5
+    const notes = [
+      { freq: 659.25, time: 0.00, dur: 0.18 }, // E5
+      { freq: 659.25, time: 0.20, dur: 0.18 }, // E5
+      { freq: 659.25, time: 0.40, dur: 0.36 }, // E5
+      { freq: 659.25, time: 0.80, dur: 0.18 }, // E5
+      { freq: 659.25, time: 1.00, dur: 0.18 }, // E5
+      { freq: 659.25, time: 1.20, dur: 0.36 }, // E5
+      { freq: 659.25, time: 1.60, dur: 0.18 }, // E5
+      { freq: 783.99, time: 1.80, dur: 0.18 }, // G5
+      { freq: 523.25, time: 2.00, dur: 0.18 }, // C5
+      { freq: 587.33, time: 2.20, dur: 0.18 }, // D5
+      { freq: 659.25, time: 2.40, dur: 0.50 }, // E5
+    ];
+
+    notes.forEach(({ freq, time, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      // Chime bell tone: Sine with a high harmonic overtone
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + time);
+
+      gain.gain.setValueAtTime(0, now + time);
+      gain.gain.linearRampToValueAtTime(0.3, now + time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + time + dur);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now + time);
+      osc.stop(now + time + dur + 0.05);
+
+      // Bell shimmer overtone (2.76x frequency for bell inharmonicity)
+      const overtone = ctx.createOscillator();
+      const otGain = ctx.createGain();
+      overtone.type = "sine";
+      overtone.frequency.setValueAtTime(freq * 2.76, now + time);
+      otGain.gain.setValueAtTime(0, now + time);
+      otGain.gain.linearRampToValueAtTime(0.08, now + time + 0.01);
+      otGain.gain.exponentialRampToValueAtTime(0.0001, now + time + dur * 0.5);
+
+      overtone.connect(otGain);
+      otGain.connect(masterGain);
+      overtone.start(now + time);
+      overtone.stop(now + time + dur * 0.5 + 0.02);
+    });
+  }
 }
 
 export const sfx = new SoundEffectsManager();
