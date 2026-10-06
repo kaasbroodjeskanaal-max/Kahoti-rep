@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase, subscribeToThreatIntel } from "./supabase";
 import QuizJoin from "./components/QuizJoin";
 import QuizManager from "./components/QuizManager";
@@ -6,7 +6,7 @@ import GameHost from "./components/GameHost";
 import GamePlayer from "./components/GamePlayer";
 import SnowEffect from "./components/SnowEffect";
 import { Quiz } from "./types";
-import { Play, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2, Volume2, VolumeX, Bell, Snowflake } from "lucide-react";
+import { Play, Pause, Award, Users, Database, Sun, Moon, ShieldAlert, Sparkles, ArrowRight, Gamepad2, Volume2, VolumeX, Bell, Snowflake, Music } from "lucide-react";
 import { translations } from "./translations";
 import { sfx } from "./soundManager";
 import { motion, AnimatePresence } from "motion/react";
@@ -83,6 +83,72 @@ export default function App() {
   };
 
   const [activeModal, setActiveModal] = useState<"rules" | "privacy" | "terms" | null>(null);
+
+  // Background Song (Timeline 1.mp4) State for site entry
+  const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+  const [bgMusicEnabled, setBgMusicEnabled] = useState(() => {
+    return localStorage.getItem("kahoti_bg_music_enabled") !== "false";
+  });
+  const [bgMusicPlaying, setBgMusicPlaying] = useState(false);
+
+  // Auto-play Timeline 1.mp4 on site entry (landing page, mode === null)
+  useEffect(() => {
+    const audio = bgMusicRef.current;
+    if (!audio) return;
+    audio.volume = 0.45;
+
+    // If navigated away from landing page (into game or manager) or disabled, pause music
+    if (!bgMusicEnabled || mode !== null) {
+      audio.pause();
+      setBgMusicPlaying(false);
+      return;
+    }
+
+    // Try playing immediately upon landing on the site
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          setBgMusicPlaying(true);
+        })
+        .catch(() => {
+          // Browser autoplay restriction prevents unmuted playback without prior user gesture.
+          // Attach one-time listeners so the song starts on the very first user click/touch/keydown anywhere!
+          setBgMusicPlaying(false);
+          const handleFirstGesture = () => {
+            if (bgMusicRef.current && mode === null && (localStorage.getItem("kahoti_bg_music_enabled") !== "false")) {
+              bgMusicRef.current
+                .play()
+                .then(() => setBgMusicPlaying(true))
+                .catch(() => {});
+            }
+          };
+          window.addEventListener("pointerdown", handleFirstGesture, { once: true });
+          window.addEventListener("touchstart", handleFirstGesture, { once: true });
+          window.addEventListener("keydown", handleFirstGesture, { once: true });
+        });
+    }
+  }, [bgMusicEnabled, mode]);
+
+  const toggleBgMusic = () => {
+    const audio = bgMusicRef.current;
+    if (!audio) return;
+    if (bgMusicPlaying) {
+      audio.pause();
+      setBgMusicPlaying(false);
+      setBgMusicEnabled(false);
+      localStorage.setItem("kahoti_bg_music_enabled", "false");
+    } else {
+      audio
+        .play()
+        .then(() => {
+          setBgMusicPlaying(true);
+          setBgMusicEnabled(true);
+          localStorage.setItem("kahoti_bg_music_enabled", "true");
+        })
+        .catch((err) => console.log("Audio play error:", err));
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem("quiz_dark_mode", String(isDark));
@@ -207,6 +273,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans selection:bg-red-900 selection:text-white relative overflow-x-hidden">
       
+      {/* Background Song for Site Entry (Timeline 1.mp4) */}
+      <audio
+        ref={bgMusicRef}
+        src="/uploads/Timeline 1.mp4"
+        loop
+        preload="auto"
+        onPlay={() => setBgMusicPlaying(true)}
+        onPause={() => setBgMusicPlaying(false)}
+      />
+
       {/* Festive Falling Snow Effect */}
       {showSnow && <SnowEffect count={32} />}
 
@@ -230,10 +306,33 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-2 p-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-slate-800/80 shadow-inner">
+          {/* Timeline 1 Background Song Toggle */}
+          <button
+            onClick={toggleBgMusic}
+            className={`px-3 h-8 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border shadow-sm cursor-pointer ${
+              bgMusicPlaying
+                ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/50 shadow-emerald-950/40"
+                : "bg-slate-800/80 text-slate-400 border-slate-700/80 hover:text-slate-200"
+            }`}
+            title={bgMusicPlaying ? (lang === "nl" ? "Pauzeer Timeline 1 achtergrondmuziek" : "Pause Timeline 1 music") : (lang === "nl" ? "Speel Timeline 1 achtergrondmuziek" : "Play Timeline 1 music")}
+          >
+            <Music className={`w-3.5 h-3.5 ${bgMusicPlaying ? "text-emerald-400 animate-pulse" : "text-slate-400"}`} />
+            <span className="hidden sm:inline">Timeline 1</span>
+            {bgMusicPlaying ? (
+              <span className="flex items-end gap-0.5 h-3 ml-0.5">
+                <span className="w-0.5 h-2 bg-emerald-400 animate-pulse" style={{ animationDuration: '0.6s' }} />
+                <span className="w-0.5 h-3 bg-emerald-300 animate-pulse" style={{ animationDuration: '0.4s' }} />
+                <span className="w-0.5 h-1.5 bg-emerald-400 animate-pulse" style={{ animationDuration: '0.8s' }} />
+              </span>
+            ) : (
+              <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
+            )}
+          </button>
+
           {/* Quick Jingle Bells Melodie Button */}
           <button
             onClick={() => sfx.playJingleBells()}
-            className="px-2.5 h-8 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30"
+            className="px-2.5 h-8 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 cursor-pointer"
             title="Speel vrolijke Jingle Bells melodie"
           >
             <Bell className="w-3.5 h-3.5 animate-bounce" />
@@ -303,8 +402,30 @@ export default function App() {
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="flex flex-col items-center"
             >
-              <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-red-500/20 border border-red-500/40 text-red-200 font-bold text-xs uppercase tracking-widest mb-8 backdrop-blur-md shadow-lg shadow-red-950/40">
-                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> 🎄 Kerstmis Quiz Special · Editie 2026 ❄️
+              <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+                <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-red-500/20 border border-red-500/40 text-red-200 font-bold text-xs uppercase tracking-widest backdrop-blur-md shadow-lg shadow-red-950/40">
+                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> 🎄 Kerstmis Quiz Special · Editie 2026 ❄️
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleBgMusic}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border backdrop-blur-md cursor-pointer ${
+                    bgMusicPlaying
+                      ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-lg shadow-emerald-950/50 hover:bg-emerald-900/80"
+                      : "bg-slate-900/80 border-slate-700/60 text-slate-300 hover:bg-slate-800"
+                  }`}
+                  title={bgMusicPlaying ? "Pauzeer muziek" : "Speel Timeline 1"}
+                >
+                  <Music className={`w-3.5 h-3.5 ${bgMusicPlaying ? "text-emerald-400 animate-pulse" : "text-slate-400"}`} />
+                  <span>{bgMusicPlaying ? (t.bgMusicPlaying || "🎵 Muziek actief: Timeline 1.mp4") : (t.bgMusicPaused || "▶️ Speel muziek: Timeline 1.mp4")}</span>
+                  {bgMusicPlaying && (
+                    <span className="flex items-end gap-0.5 h-3 ml-1">
+                      <span className="w-0.5 h-2 bg-emerald-400 animate-pulse" style={{ animationDuration: '0.6s' }} />
+                      <span className="w-0.5 h-3 bg-emerald-300 animate-pulse" style={{ animationDuration: '0.4s' }} />
+                      <span className="w-0.5 h-1.5 bg-emerald-400 animate-pulse" style={{ animationDuration: '0.8s' }} />
+                    </span>
+                  )}
+                </button>
               </div>
               
               <h1 className="text-4xl md:text-6xl lg:text-[5.5rem] font-black font-display tracking-tight leading-[1.08] mb-6 text-white drop-shadow-xl">

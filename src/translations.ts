@@ -32,6 +32,9 @@ export const translations = {
     footer: "Kahoti-Rep 🎄 Kerst Event 🎅 · Gebouwd met Supabase & PostgreSQL.",
     nameChangeNotice: "Kahoti-Rep was voorheen bekend als Kahoti. We hebben de naam aangepast omdat het te veel op een ander platform leek.",
     jingleBellsBtn: "Jingle Bells 🔔",
+    bgMusicBtn: "Timeline 1 🎵",
+    bgMusicPlaying: "Muziek actief: Timeline 1.mp4",
+    bgMusicPaused: "Speel muziek: Timeline 1.mp4",
     loadChristmasSampleQuiz: "🎄 Laad Voorbeeld Kerstquiz 🎅",
     christmasActiveNotice: "🎄 KERSTMIS EVENT ACTIEF ❄️ Geniet van de feestdagen met speciale kerstquizzen, feestelijke avatars en magische sneeuwval! 🎁",
     
@@ -178,6 +181,9 @@ export const translations = {
     footer: "Kahoti-Rep 🎄 Christmas Event 🎅 · Powered by Supabase & PostgreSQL.",
     nameChangeNotice: "Kahoti-Rep was formerly known as Kahoti. We updated the name because it resembled another platform too much.",
     jingleBellsBtn: "Jingle Bells 🔔",
+    bgMusicBtn: "Timeline 1 🎵",
+    bgMusicPlaying: "Music active: Timeline 1.mp4",
+    bgMusicPaused: "Play music: Timeline 1.mp4",
     loadChristmasSampleQuiz: "🎄 Load Christmas Sample Quiz 🎅",
     christmasActiveNotice: "🎄 CHRISTMAS EVENT ACTIVE ❄️ Enjoy the holidays with Christmas quizzes, festive avatars, and magical snowfall! 🎁",
     

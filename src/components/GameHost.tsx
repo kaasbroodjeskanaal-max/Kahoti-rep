@@ -1322,7 +1322,19 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 relative z-10">
+                      <button
+                        onClick={() => changeLobbyMusic("/uploads/Timeline 1.mp4")}
+                        className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                          selectedLobbyMusicUrl === "/uploads/Timeline 1.mp4" || selectedLobbyMusicUrl === "/uploads/Timeline_1.mp4"
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md"
+                            : "bg-slate-900/60 text-slate-400 border-slate-800/40 hover:border-slate-700 hover:text-slate-300"
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5"><Music className="w-3.5 h-3.5 text-emerald-400" /> Timeline 1</span>
+                        {(selectedLobbyMusicUrl === "/uploads/Timeline 1.mp4" || selectedLobbyMusicUrl === "/uploads/Timeline_1.mp4") && <span className="text-[10px] bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full font-bold">Actief</span>}
+                      </button>
+
                       <button
                         onClick={() => changeLobbyMusic("https://www.image2url.com/r2/default/audio/1781202460294-d546fcf7-83a2-4b68-9824-82d64768dffb.mp3")}
                         className={`px-4 py-3 rounded-2xl border text-xs font-bold transition flex items-center justify-between cursor-pointer ${
@@ -1556,25 +1568,28 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                   {/* Top Stats of question */}
                   <div className="flex justify-between items-center gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="bg-indigo-950 px-4 py-2.5 rounded-xl border border-indigo-900 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-indigo-400" />
-                        <span className="font-mono font-bold text-2xl text-indigo-200">{timeLeft}s</span>
+                      <div className={`${activeTheme.name.includes("Kerst") ? "bg-red-950/80 border-red-500/50" : "bg-indigo-950 border-indigo-900"} px-4 py-2.5 rounded-xl border flex items-center gap-2`}>
+                        <Clock className={`w-5 h-5 ${activeTheme.name.includes("Kerst") ? "text-amber-400" : "text-indigo-400"}`} />
+                        <span className={`font-mono font-bold text-2xl ${activeTheme.name.includes("Kerst") ? "text-amber-300" : "text-indigo-200"}`}>{timeLeft}s</span>
                       </div>
-                      <span className="text-slate-400 font-medium">
-                        Vraag {session.currentQuestionIndex + 1} / {session.totalQuestions}
+                      <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                        {activeTheme.name.includes("Kerst") && <span>🎄</span>}
+                        <span>Vraag {session.currentQuestionIndex + 1} / {session.totalQuestions}</span>
                       </span>
                     </div>
 
                     <div className="bg-slate-950 px-4 py-2 rounded-xl text-slate-400 text-sm font-semibold border border-slate-800">
-                      Antwoorden: <span className="text-indigo-400 font-bold text-lg">{answeredCount}</span> / {totalActives}
+                      Antwoorden: <span className={`${activeTheme.name.includes("Kerst") ? "text-amber-300" : "text-indigo-400"} font-bold text-lg`}>{answeredCount}</span> / {totalActives}
                     </div>
                   </div>
 
                   {/* Question Prompt */}
                   <div className={`${activeTheme.cardBg} rounded-3xl px-8 py-10 text-center space-y-4 shadow-xl relative z-10`}>
-                    <p className="text-xs text-indigo-400 tracking-widest font-bold uppercase flex items-center justify-center gap-1.5">
+                    <p className={`text-xs ${activeTheme.name.includes("Kerst") ? "text-amber-300" : "text-indigo-400"} tracking-widest font-bold uppercase flex items-center justify-center gap-1.5`}>
+                      {activeTheme.name.includes("Kerst") && <span>❄️</span>}
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 inline" />
                       {currentQuestion.questionType === "wheel_spin" ? "KANS-GOKRONDE" : "MEERKEUZEVRAAG"}
+                      {activeTheme.name.includes("Kerst") && <span>🎄</span>}
                     </p>
                     <h1 className="text-3xl md:text-4xl font-extrabold text-white font-display leading-snug">
                       {currentQuestion.questionText}
@@ -2128,12 +2143,20 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                         <div className="inline-flex p-3 bg-amber-500/20 text-amber-400 rounded-3xl animate-bounce mb-2">
                           <Award className="w-12 h-12" />
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-extrabold font-display text-white">Spel Afgelopen!</h1>
-                        <p className="text-slate-400 max-w-md mx-auto text-sm">Bekijk hieronder de eindwinnaars of open het gedetailleerd overzicht.</p>
+                        <h1 className="text-4xl md:text-5xl font-extrabold font-display text-white">
+                          {activeTheme.name.includes("Kerst") ? "🎄 Kerstmis Spel Afgelopen! 🎅" : "Spel Afgelopen!"}
+                        </h1>
+                        <p className="text-slate-400 max-w-md mx-auto text-sm">
+                          {activeTheme.name.includes("Kerst") ? "Bekijk hieronder de feestelijke winnaars van de kerstquiz!" : "Bekijk hieronder de eindwinnaars of open het gedetailleerd overzicht."}
+                        </p>
                       </>
                     ) : (
                       <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-display text-white flex items-center justify-center gap-2">
-                        <Trophy className="w-7 h-7 text-amber-400 inline" /> EINDSTAND PODIUM <Trophy className="w-7 h-7 text-amber-400 inline" />
+                        {activeTheme.name.includes("Kerst") ? (
+                          <>🎄 KERSTMIS EINDSTAND PODIUM 🎅</>
+                        ) : (
+                          <><Trophy className="w-7 h-7 text-amber-400 inline" /> EINDSTAND PODIUM <Trophy className="w-7 h-7 text-amber-400 inline" /></>
+                        )}
                       </h1>
                     )}
                   </div>
@@ -2245,8 +2268,12 @@ export default function GameHost({ lang = "nl", quiz, onExit }: GameHostProps) {
                               >
                                 <div className="relative mb-1.5">
                                   <div className="absolute inset-0 bg-yellow-500/30 rounded-full blur-xl animate-pulse scale-125 z-0" />
-                                  <div className="absolute -top-5 sm:-top-7 left-1/2 -translate-x-1/2 z-20">
-                                    <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300 animate-bounce -mb-1" />
+                                  <div className="absolute -top-5 sm:-top-7 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center">
+                                    {activeTheme.name.includes("Kerst") ? (
+                                      <span className="text-2xl sm:text-3xl animate-bounce -mb-1 select-none">🎅</span>
+                                    ) : (
+                                      <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300 animate-bounce -mb-1" />
+                                    )}
                                   </div>
                                   <img src={a0} alt="avatar" className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 bg-slate-950 border-2 sm:border-4 border-amber-400 rounded-full shadow-2xl relative z-10 object-cover" />
                                   <span className="absolute -bottom-1 -right-1 bg-amber-400 text-slate-950 text-[11px] sm:text-xs font-extrabold w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border border-slate-900 z-20 font-display animate-pulse shadow-md">1</span>

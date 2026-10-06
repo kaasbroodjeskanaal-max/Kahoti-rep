@@ -184,9 +184,10 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
   const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
     try {
       const cached = localStorage.getItem("cached_quizzes");
-      return cached ? JSON.parse(cached) : [];
+      const parsed = cached ? JSON.parse(cached) : [];
+      return parsed.length > 0 ? parsed : [CHRISTMAS_SAMPLE_QUIZ];
     } catch {
-      return [];
+      return [CHRISTMAS_SAMPLE_QUIZ];
     }
   });
 
@@ -327,7 +328,10 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
         };
       });
 
-      const sorted = list.sort((a, b) => b.id.localeCompare(a.id));
+      let sorted = list.sort((a, b) => b.id.localeCompare(a.id));
+      if (sorted.length === 0) {
+        sorted = [CHRISTMAS_SAMPLE_QUIZ];
+      }
       setQuizzes(sorted);
       try {
         localStorage.setItem("cached_quizzes", JSON.stringify(sorted));
@@ -845,8 +849,11 @@ export default function QuizManager({ lang = "nl", onHostGame, onBack }: QuizMan
                 <Zap className="w-4 h-4" />
               </span>
               <div>
-                <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-                  Kahoti Studio
+                <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight flex items-center gap-2">
+                  <span>Kahoti Studio</span>
+                  <span className="text-[10px] bg-red-950/70 border border-red-700/50 text-amber-300 px-2 py-0.5 rounded-full font-mono font-bold flex items-center gap-1 shadow-xs">
+                    🎄 Kerst Editie 🎅
+                  </span>
                 </h1>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium block">
                   {activeTab === "create"

@@ -148,7 +148,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
   const [accIdx, setAccIdx] = useState(0);
   const [gradIdx, setGradIdx] = useState(8);
   const [avatarTab, setAvatarTab] = useState<"characters" | "customize">("characters");
-  const [activeCategory, setActiveCategory] = useState<"all" | "animals" | "scifi" | "food" | "heroes">("all");
+  const [activeCategory, setActiveCategory] = useState<"all" | "christmas" | "animals" | "scifi" | "food" | "heroes">("christmas");
   const [activePresetId, setActivePresetId] = useState<string | null>("king_lion");
   const [customBaseCategory, setCustomBaseCategory] = useState<"all" | "animals" | "food" | "gaming" | "magic">("all");
 
@@ -246,15 +246,17 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
       setCustomSeeds(DICEBEAR_POPULAR_SEEDS[conf.style] || []);
       setNickname(conf.suggestedName);
     } else {
-      const randomPreset = AVATAR_PRESETS[Math.floor(Math.random() * AVATAR_PRESETS.length)];
+      const xmasPresets = AVATAR_PRESETS.filter(p => p.category === "christmas");
+      const pool = xmasPresets.length > 0 && Math.random() > 0.35 ? xmasPresets : AVATAR_PRESETS;
+      const randomPreset = pool[Math.floor(Math.random() * pool.length)];
       applyPreset(randomPreset);
       setNickname(randomPreset.suggestedName + Math.floor(Math.random() * 89 + 10));
     }
     confetti({
-      particleCount: 30,
-      spread: 60,
+      particleCount: 35,
+      spread: 65,
       origin: { y: 0.45 },
-      colors: ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b"],
+      colors: ["#dc2626", "#16a34a", "#fbbf24", "#ffffff", "#38bdf8"],
       disableForReducedMotion: true,
     });
     sfx.playSelectAnswer();
@@ -959,6 +961,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                 {/* Category Filter Pills */}
                 <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                   {[
+                    { id: "christmas", label: "Kerstmis 🎄" },
                     { id: "all", label: t.catAll || "Alles" },
                     { id: "animals", label: t.catAnimals || "Dieren 🐾" },
                     { id: "scifi", label: t.catSciFi || "Sci-Fi 🚀" },
@@ -971,7 +974,7 @@ export default function QuizJoin({ lang = "nl", onJoined, onBack }: QuizJoinProp
                       onClick={() => { setActiveCategory(cat.id as any); sfx.playSelectAnswer(); }}
                       className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition cursor-pointer ${
                         activeCategory === cat.id
-                          ? "bg-purple-600 text-white shadow-xs"
+                          ? "bg-red-600 text-white shadow-xs"
                           : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
                       }`}
                     >

@@ -1128,8 +1128,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               className="flex-1 flex flex-col items-center justify-center text-center space-y-6 py-6 px-4 relative z-10"
             >
               <div className="space-y-1">
-                <span className="inline-block px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-xs rounded-full uppercase tracking-wider">
-                  Bereid je voor!
+                <span className={`inline-block px-3 py-1 ${activeTheme.name.includes("Kerst") ? "bg-red-500/20 border-red-500/40 text-red-200" : "bg-indigo-50 border-indigo-100 text-indigo-700"} border font-bold text-xs rounded-full uppercase tracking-wider`}>
+                  {activeTheme.name.includes("Kerst") ? "🎄 Bereid je voor! ❄️" : "Bereid je voor!"}
                 </span>
                 <p className="text-slate-400 text-xs font-bold font-mono tracking-wider">
                   VRAAG {currentQuestionIdx + 1} VAN DE {session.totalQuestions}
@@ -1192,8 +1192,8 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
               {/* High-visibility Dynamic Question Display Header */}
               <div className={`${activeTheme.cardBg} rounded-3xl p-5 md:p-6 flex flex-col gap-3 shadow-md border border-white/5 relative z-10`}>
                 <div className="flex justify-between items-center bg-white/5 px-2.5 py-1 rounded-full border border-white/10 self-start w-full">
-                  <span className="text-[10px] text-indigo-300 font-black tracking-widest uppercase">
-                    VRAAG {currentQuestionIdx + 1} / {session.totalQuestions}
+                  <span className={`text-[10px] ${activeTheme.name.includes("Kerst") ? "text-amber-300" : "text-indigo-300"} font-black tracking-widest uppercase`}>
+                    {activeTheme.name.includes("Kerst") ? "🎄 " : ""}VRAAG {currentQuestionIdx + 1} / {session.totalQuestions}
                   </span>
                   <div className="flex items-center gap-2">
                     {self && (
@@ -1613,12 +1613,14 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                 /* CORRECT ANSWER DESIGN */
                 <div className="bg-emerald-500 border-b-8 border-emerald-600 rounded-3xl p-8 text-white text-center space-y-6 shadow-md">
                   <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl font-extrabold mx-auto animate-bounce">
-                    <Check className="w-10 h-10" />
+                    {activeTheme.name.includes("Kerst") ? "🎄" : <Check className="w-10 h-10" />}
                   </div>
                   <div className="space-y-1">
-                    <h2 className="text-3xl font-black font-display">Correct geantwoord!</h2>
+                    <h2 className="text-3xl font-black font-display">
+                      {activeTheme.name.includes("Kerst") ? "Geweldig! Correct! 🎅" : "Correct geantwoord!"}
+                    </h2>
                     <p className="text-emerald-100 font-semibold text-sm">
-                      Mooi gewerkt! Jouw reflexen zijn geweldig.
+                      {activeTheme.name.includes("Kerst") ? "Feestelijk goed gedaan! Je reflexen zijn top! 🎁" : "Mooi gewerkt! Jouw reflexen zijn geweldig."}
                     </p>
                   </div>
 
@@ -1924,7 +1926,7 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                     <div className="flex items-center justify-center gap-2">
                       <Trophy className="w-6 h-6 text-amber-400 animate-bounce" />
                       <span className="text-amber-400 text-xs font-black uppercase tracking-widest font-mono">
-                        EERSTE PLAATS - EINDWINNAAR!
+                        {activeTheme.name.includes("Kerst") ? "🎄 EERSTE PLAATS - KERSTMIS KAMPIOEN! 🎅" : "EERSTE PLAATS - EINDWINNAAR!"}
                       </span>
                       <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
                     </div>
@@ -1932,7 +1934,10 @@ export default function GamePlayer({ lang = "nl", sessionId, nickname, onExit }:
                       Gefeliciteerd {displayName}!
                     </h1>
                     <p className={`text-xs ${textMutedClass}`}>
-                      Je bent de absolute winnaar van de quiz met een topscore van <strong className="text-amber-400 font-mono">{self.score} pt</strong>!
+                      {activeTheme.name.includes("Kerst")
+                        ? "Je bent de feestelijke kampioen van de kerstquiz met een topscore van "
+                        : "Je bent de absolute winnaar van de quiz met een topscore van "}
+                      <strong className="text-amber-400 font-mono">{self.score} pt</strong>!
                     </p>
                   </div>
                 )}
